@@ -1,6 +1,6 @@
 # Resume Studio
 
-`Resume Studio` is a bilingual resume and cover-letter editor with live preview, recruiter-style analysis, ATS matching, version history, section drag-and-drop, and Arabic/English workflows.
+`Resume Studio` is a bilingual resume and cover-letter editor with live preview, recruiter-style analysis, ATS matching, AI HR review, version history, section drag-and-drop, and Arabic/English workflows.
 
 Open:
 - `index.html` for the English editor
@@ -66,7 +66,8 @@ That smoke test verifies:
 
 This repo is prepared for:
 - GitHub Pages for the static site
-- Cloudflare Workers for AI-backed helper endpoints
+- direct browser AI with a user-supplied OpenRouter or OpenAI key
+- optional Cloudflare Workers for proxy/helper endpoints
 
 ### GitHub Pages
 
@@ -74,10 +75,26 @@ This repo is prepared for:
 - Push the repo to the `main` branch on GitHub
 - Enable GitHub Pages with GitHub Actions
 
-### Cloudflare API
+### AI on the Hosted Site
+
+- The live site can use AI directly from the browser with the user’s own key.
+- Supported modes now include:
+  - `OpenRouter Auto`
+  - `OpenRouter Free`
+  - `OpenRouter Manual`
+  - `OpenAI`
+- The shared AI workspace settings live in the `Commands` tab and power:
+  - Commands fallback
+  - Quality AI review
+  - ATS AI review
+  - AI HR Review
+  - cover-letter draft generation
+  - English to Arabic sync
+
+### Optional Cloudflare API
 
 - The worker scaffold lives in `cloudflare/`
-- Deploy it with Wrangler
+- Deploy it with Wrangler if you want a hosted proxy/helper layer
 - Put the deployed worker URL into `runtime-config.js` as `apiOrigin`
 
 Example:
@@ -96,4 +113,5 @@ window.resumeRuntimeConfig = {
 - `Print / Save PDF` is the primary hosted PDF path
 - `Save PDF Now` remains for local helper mode
 - English PDF autofill works in the browser on the hosted site
-- AI-backed Commands fallback and English-to-Arabic sync use the Cloudflare API
+- AI features can run directly in the browser with the user’s own key
+- If the Cloudflare worker is deployed, the hosted app can use it for helper/proxy routes too

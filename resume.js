@@ -68,6 +68,11 @@
       activeHighlight: null
     },
     ai: loadAiConfig(),
+    aiReviews: {
+      quality: createAiReviewState(),
+      ats: createAiReviewState(),
+      hr: createAiReviewState()
+    },
     pdf: {
       ready: false,
       checking: false,
@@ -706,6 +711,7 @@
       "sections",
       "style",
       "commands",
+      "aiHr",
       "coverLetter",
       "professionalExperience",
       "internships",
@@ -3675,6 +3681,9 @@
       case "commands":
         panel.appendChild(renderCommandsEditor());
         break;
+      case "aiHr":
+        panel.appendChild(renderAiHrEditor());
+        break;
       case "coverLetter":
         panel.appendChild(renderCoverLetterEditor());
         break;
@@ -3914,52 +3923,59 @@
     });
 
     const summary = document.createElement("summary");
-    summary.textContent = locale.commandsFallbackTitle;
+    summary.textContent = locale.aiWorkspaceTitle;
     attachHelp(summary, { helpKey: "commands.fallback", label: locale.commandsFallbackTitle });
     fallback.appendChild(summary);
 
     const fallbackFields = document.createElement("div");
     fallbackFields.className = "editor-persistence__meta";
+    const providerChoices = [
+      { value: "openrouter:auto", label: locale.aiProviderOpenRouterAuto },
+      { value: "openrouter:free", label: locale.aiProviderOpenRouterFree },
+      { value: "openrouter:manual", label: locale.aiProviderOpenRouterManual },
+      { value: "openai:manual", label: locale.aiProviderOpenAi }
+    ];
     fallbackFields.append(
       createCheckboxField(locale.commandsFallbackEnabled, state.ai.enabled, (checked) => {
         state.ai.enabled = checked;
         persistAiConfig();
       }, { trackHistory: false, helpKey: "commands.fallbackEnabled" }),
-      createSelectField(locale.aiProvider, state.ai.provider, [
-        { value: "openrouter", label: locale.aiProviderOpenRouter },
-        { value: "openai", label: locale.aiProviderOpenAi }
-      ], (value) => {
-        const previousDefault = getDefaultAiModel(state.ai.provider);
-        state.ai.provider = normalizeAiProvider(value, state.ai.apiKey);
+      createSelectField(locale.aiProvider, `${state.ai.provider}:${state.ai.mode}`, providerChoices, (value) => {
+        const previousDefault = getDefaultAiModel(state.ai.provider, state.ai.mode);
+        applyAiProviderSelection(value);
         if (!state.ai.model || state.ai.model === previousDefault) {
-          state.ai.model = getDefaultAiModel(state.ai.provider);
+          state.ai.model = getDefaultAiModel(state.ai.provider, state.ai.mode);
         }
         persistAiConfig();
         renderEditor();
       }, { trackHistory: false, helpKey: "commands.fallbackProvider" }),
       createInputField(locale.aiApiKey, state.ai.apiKey, (value) => {
         state.ai.apiKey = value;
-        if (!state.ai.provider || state.ai.provider === "openai") {
-          state.ai.provider = normalizeAiProvider(state.ai.provider, value);
-        }
+        state.ai.provider = normalizeAiProvider(state.ai.provider, value);
         persistAiConfig();
+        renderEditor();
       }, {
         type: "password",
         placeholder: getAiApiKeyPlaceholder(state.ai.provider),
         trackHistory: false,
         helpKey: "commands.fallbackApiKey"
-      }),
-      createInputField(locale.aiModel, state.ai.model, (value) => {
-        state.ai.model = value;
-        persistAiConfig();
-      }, {
-        placeholder: getAiModelPlaceholder(state.ai.provider),
-        trackHistory: false,
-        helpKey: "commands.fallbackModel"
       })
     );
+    if (shouldShowAiModelInput()) {
+      fallbackFields.append(
+        createInputField(locale.aiModel, state.ai.model, (value) => {
+          state.ai.model = value;
+          persistAiConfig();
+        }, {
+          placeholder: getAiModelPlaceholder(state.ai.provider, state.ai.mode),
+          trackHistory: false,
+          helpKey: "commands.fallbackModel"
+        })
+      );
+    }
     fallback.append(
       fallbackFields,
+      createAtsNotice(locale.aiWorkspaceDescription),
       createAtsNotice(formatAiHint())
     );
     wrapper.appendChild(fallback);
@@ -4372,6 +4388,8 @@
     const actions = document.createElement("div");
     actions.className = "editor-actions";
     actions.append(
+      createActionButton(locale.coverLetterGenerate, "is-primary", handleGenerateCoverLetterSuggestion, state.coverLetterAssistant.loading),
+      createActionButton(locale.coverLetterApply, "", handleApplyCoverLetterSuggestion, !state.coverLetterAssistant.suggestion || state.coverLetterAssistant.loading),
       createActionButton(locale.coverLetterCopy, "", handleCopyCoverLetter),
       createActionButton(locale.coverLetterSavePdf, "", () => handleLivePdfExport("cover-letter"))
     );
@@ -4415,6 +4433,20 @@
       }, { rows: 3 }),
       actions
     );
+
+    wrapper.appendChild(createAtsNotice(locale.aiSharedWorkspaceHint));
+
+    if (state.coverLetterAssistant.loading) {
+      wrapper.appendChild(createAtsNotice(locale.coverLetterGenerating));
+    }
+
+    if (state.coverLetterAssistant.error) {
+      wrapper.appendChild(createAtsNotice(state.coverLetterAssistant.error, "is-warning"));
+    }
+
+    if (state.coverLetterAssistant.suggestion) {
+      wrapper.appendChild(createCoverLetterSuggestionCard(state.coverLetterAssistant.suggestion));
+    }
 
     return wrapper;
   }
@@ -4739,6 +4771,12 @@
       sectionKey: "ats",
       focusSelector: "textarea"
     });
+    const actions = document.createElement("div");
+    actions.className = "editor-actions";
+    actions.append(
+      createActionButton(locale.aiAtsReviewRun, "is-primary", () => triggerAiReview("ats"), state.aiReviews.ats.loading),
+      createActionButton(locale.aiReviewClear, "", () => clearAiReview("ats"), !state.aiReviews.ats.result && !state.aiReviews.ats.error && !state.aiReviews.ats.loading)
+    );
 
     atsTextarea = createTextAreaField(
       locale.fields.jobDescription,
@@ -4757,7 +4795,12 @@
     results.className = "editor-ats";
     atsResultsHost = results;
 
-    section.append(atsTextarea, results);
+    section.append(
+      createAtsNotice(locale.aiSharedWorkspaceHint),
+      actions,
+      atsTextarea,
+      results
+    );
     renderAtsAnalysisPanel();
     return section;
   }
@@ -4769,8 +4812,56 @@
     const results = document.createElement("div");
     results.className = "editor-quality";
     qualityResultsHost = results;
-    section.appendChild(results);
+    const actions = document.createElement("div");
+    actions.className = "editor-actions";
+    actions.append(
+      createActionButton(locale.aiQualityReviewRun, "is-primary", () => triggerAiReview("quality"), state.aiReviews.quality.loading),
+      createActionButton(locale.aiReviewClear, "", () => clearAiReview("quality"), !state.aiReviews.quality.result && !state.aiReviews.quality.error && !state.aiReviews.quality.loading)
+    );
+    section.append(
+      createAtsNotice(locale.aiSharedWorkspaceHint),
+      actions,
+      results
+    );
     renderQualityPanel();
+    return section;
+  }
+
+  function renderAiHrEditor() {
+    const section = createEditorSection(locale.aiHrTitle, locale.aiHrDescription, {
+      sectionKey: "aiHr",
+      focusSelector: "input, textarea, button"
+    });
+
+    section.appendChild(createAtsNotice(locale.aiHrUsesCurrentCvNotice));
+    section.append(
+      createInputField(locale.fields.targetRole, state.targeting.targetRole, (value) => {
+        state.targeting.targetRole = value;
+        scheduleAtsAnalysis();
+        scheduleQualityAnalysis();
+        scheduleDraftSave();
+      }),
+      createTextAreaField(locale.fields.jobDescription, state.ats.jobDescription, (value) => {
+        state.ats.jobDescription = value;
+        persistAtsDraft();
+        scheduleAtsAnalysis();
+        scheduleQualityAnalysis();
+        scheduleDraftSave();
+      }, { rows: 10, placeholder: locale.atsPlaceholder })
+    );
+
+    const actions = document.createElement("div");
+    actions.className = "editor-actions";
+    actions.append(
+      createActionButton(locale.aiHrRun, "is-primary", () => triggerAiReview("hr"), state.aiReviews.hr.loading),
+      createActionButton(locale.aiReviewClear, "", () => clearAiReview("hr"), !state.aiReviews.hr.result && !state.aiReviews.hr.error && !state.aiReviews.hr.loading)
+    );
+    section.append(
+      createAtsNotice(locale.aiSharedWorkspaceHint),
+      actions,
+      renderAiReviewPanel(state.aiReviews.hr, "hr")
+    );
+
     return section;
   }
 
@@ -6427,6 +6518,192 @@
     });
   }
 
+  function hasAiWorkspaceConfig() {
+    return Boolean(state.ai.enabled && String(state.ai.apiKey || "").trim());
+  }
+
+  function createAiHeaders(provider) {
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${state.ai.apiKey}`
+    };
+    if (normalizeAiProvider(provider, state.ai.apiKey) === "openrouter") {
+      const origin = !runningLocally && window.location.origin && window.location.origin !== "null"
+        ? window.location.origin
+        : "https://jao399.github.io";
+      headers["HTTP-Referer"] = origin;
+      headers["X-Title"] = "Resume Studio";
+    }
+    return headers;
+  }
+
+  async function requestAiCompletionDirect({ messages, requireJson = false }) {
+    if (!String(state.ai.apiKey || "").trim()) {
+      throw new Error(locale.aiRequiresKey);
+    }
+
+    const provider = normalizeAiProvider(state.ai.provider, state.ai.apiKey);
+    const model = getResolvedAiModel();
+    const endpoint = provider === "openrouter"
+      ? "https://openrouter.ai/api/v1/chat/completions"
+      : "https://api.openai.com/v1/chat/completions";
+
+    const payload = {
+      model,
+      messages,
+      temperature: 0.2
+    };
+    if (requireJson) {
+      payload.response_format = { type: "json_object" };
+    }
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: createAiHeaders(provider),
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body?.error?.message || body?.error || locale.aiRequestFailed);
+    }
+    const content = body?.choices?.[0]?.message?.content;
+    if (typeof content === "string" && content.trim()) {
+      return content.trim();
+    }
+    if (Array.isArray(content)) {
+      const text = content.map((item) => item?.text || "").filter(Boolean).join("\n").trim();
+      if (text) {
+        return text;
+      }
+    }
+    throw new Error(locale.aiResponseEmpty);
+  }
+
+  function extractAiJsonPayload(text) {
+    const raw = String(text || "").trim();
+    if (!raw) {
+      throw new Error(locale.aiResponseEmpty);
+    }
+    try {
+      return JSON.parse(raw);
+    } catch (_error) {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) {
+        throw new Error(locale.aiResponseInvalidJson);
+      }
+      return JSON.parse(match[0]);
+    }
+  }
+
+  async function requestAiJsonDirect(systemPrompt, userPrompt) {
+    const content = await requestAiCompletionDirect({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      requireJson: true
+    });
+    return extractAiJsonPayload(content);
+  }
+
+  async function requestApiTask(endpointPath, body, directFallback) {
+    const canCallApi = Boolean(pdfHelperOrigin);
+    if (canCallApi) {
+      try {
+        const response = await fetch(`${pdfHelperOrigin}${endpointPath}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(body)
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok && payload?.success !== false) {
+          return payload;
+        }
+        if (!directFallback) {
+          throw new Error(payload?.error || locale.aiRequestFailed);
+        }
+      } catch (error) {
+        if (!directFallback) {
+          throw error;
+        }
+      }
+    }
+    if (!directFallback) {
+      throw new Error(locale.hostedApiMissing);
+    }
+    return directFallback();
+  }
+
+  function buildCurrentResumeTextForAi() {
+    const lines = [];
+    const profile = state.data.profile || {};
+    lines.push(`Name: ${profile.name || ""}`);
+    lines.push(`Email: ${profile.email || ""}`);
+    lines.push(`Phone: ${profile.phone || ""}`);
+    lines.push(`Location: ${profile.location || ""}`);
+    if (profile.linkedin) {
+      lines.push(`LinkedIn: ${profile.linkedin}`);
+    }
+    if (profile.github) {
+      lines.push(`GitHub: ${profile.github}`);
+    }
+    if (profile.portfolio) {
+      lines.push(`Portfolio: ${profile.portfolio}`);
+    }
+    lines.push("");
+    lines.push(`Professional Summary:\n${String(state.data.summary || "").trim()}`);
+    lines.push("");
+    [
+      ["Professional Experience", state.data.professionalExperience || [], (item) => [`${item.role || ""} | ${item.organization || ""}`, `${item.date || ""} | ${item.location || ""}`, ...(item.bullets || []).map((bullet) => `- ${bullet}`)]],
+      ["Internships", state.data.internships || [], (item) => [`${item.role || ""} | ${item.organization || ""}`, `${item.date || ""} | ${item.location || ""}`, ...(item.bullets || []).map((bullet) => `- ${bullet}`)]],
+      ["Projects", state.data.projects || [], (item) => [`${item.title || ""} | ${item.date || ""}`, item.linkHref ? `Link: ${item.linkHref}` : "", ...(item.bullets || []).map((bullet) => `- ${bullet}`)]],
+      ["Education", state.data.education || [], (item) => [`${item.degree || ""} | ${item.institution || ""}`, `${item.date || ""} | ${item.location || ""}`]],
+      ["Certificates", state.data.certificates || [], (item) => [`${item.title || ""}`, item.description || ""]]
+    ].forEach(([label, list, formatter]) => {
+      if (!Array.isArray(list) || !list.length) {
+        return;
+      }
+      lines.push(label);
+      list.forEach((item) => {
+        formatter(item).filter(Boolean).forEach((line) => lines.push(line));
+        lines.push("");
+      });
+    });
+    if (Array.isArray(state.data.skills?.technical) && state.data.skills.technical.length) {
+      lines.push("Technical Skills");
+      state.data.skills.technical.forEach((item) => lines.push(`${item.label}: ${item.items}`));
+      lines.push("");
+    }
+    if (Array.isArray(state.data.skills?.soft) && state.data.skills.soft.length) {
+      lines.push("Soft Skills");
+      state.data.skills.soft.forEach((item) => lines.push(`- ${item}`));
+      lines.push("");
+    }
+    if (Array.isArray(state.data.customSections) && state.data.customSections.length) {
+      state.data.customSections.forEach((section) => {
+        if (!section?.visible) {
+          return;
+        }
+        lines.push(section.title || "Custom Section");
+        (section.items || []).forEach((item) => {
+          if (typeof item === "string") {
+            lines.push(`- ${item}`);
+            return;
+          }
+          if (item?.text) {
+            lines.push(`- ${item.text}`);
+            return;
+          }
+          lines.push(`- ${[item?.title, item?.description].filter(Boolean).join(" | ")}`);
+        });
+        lines.push("");
+      });
+    }
+    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
   function applyCommandWorkspaceSectionRename(sectionKey, title) {
     const nextTitle = String(title || "").trim();
     if (!nextTitle) {
@@ -6489,33 +6766,48 @@
   }
 
   async function requestCommandPlanFallback({ selectedSections, command, content }) {
-    if (!canReachHostedApi() && !runningLocally) {
-      throw createCommandWorkspaceError(locale.hostedApiMissing);
-    }
-
-    const response = await fetch(`${pdfHelperOrigin}/command-plan`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        provider: state.ai.provider,
-        apiKey: state.ai.apiKey,
-        model: state.ai.model || getDefaultAiModel(state.ai.provider),
-        selectedSections,
-        command,
-        content,
-        currentSections: selectedSections.reduce((accumulator, key) => {
-          accumulator[key] = getCommandWorkspaceSectionValue(key);
-          return accumulator;
-        }, {})
-      })
+    const currentSections = selectedSections.reduce((accumulator, key) => {
+      accumulator[key] = getCommandWorkspaceSectionValue(key);
+      return accumulator;
+    }, {});
+    const payload = await requestApiTask("/command-plan", {
+      provider: state.ai.provider,
+      apiKey: state.ai.apiKey,
+      model: getResolvedAiModel(),
+      selectedSections,
+      command,
+      content,
+      currentSections
+    }, async () => {
+      const structured = await requestAiJsonDirect(
+        [
+          "You plan structured resume editor updates in English.",
+          "Return valid JSON only.",
+          "Do not invent facts, metrics, dates, links, or employers.",
+          "Use the user's pasted content and current section data only.",
+          "When the command is a section rename, return it in sectionTitles.",
+          "Otherwise return structured replacements in updates.",
+          "Only include the selected section keys.",
+          "JSON shape:",
+          "{\"updates\": {\"sectionKey\": ...}, \"sectionTitles\": {\"sectionKey\": \"New title\"}, \"note\": \"...\"}"
+        ].join("\n"),
+        [
+          `Selected sections: ${JSON.stringify(selectedSections || [])}`,
+          `Command: ${String(command || "")}`,
+          `Pasted content: ${String(content || "")}`,
+          `Current sections: ${JSON.stringify(currentSections || {})}`,
+          "Return only the updates needed for the selected sections."
+        ].join("\n")
+      );
+      return {
+        success: true,
+        updates: structured?.updates || {},
+        sectionTitles: structured?.sectionTitles || {},
+        note: String(structured?.note || "")
+      };
+    }).catch((error) => {
+      throw createCommandWorkspaceError(error.message || locale.commandsFallbackFailed);
     });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload?.success) {
-      throw createCommandWorkspaceError(payload?.error || locale.commandsFallbackFailed);
-    }
 
     const operations = selectedSections.map((sectionKey) => {
       if (payload.sectionTitles && payload.sectionTitles[sectionKey]) {
@@ -6838,7 +7130,139 @@
   }
 
   async function requestAiCoverLetterSuggestion(draft) {
-    throw new Error("Legacy cover-letter AI generation was removed.");
+    const response = await requestApiTask("/cover-letter-draft", {
+      provider: state.ai.provider,
+      apiKey: state.ai.apiKey,
+      model: getResolvedAiModel(),
+      jobTitle: state.targeting.targetRole || draft?.targetRole || "",
+      jobDescription: state.ats.jobDescription || "",
+      cvText: buildCurrentResumeTextForAi(),
+      draft
+    }, async () => {
+      const structured = await requestAiJsonDirect(
+        [
+          "You write recruiter-ready cover letters for the current resume only.",
+          "Use the resume facts exactly as provided.",
+          "Do not invent achievements, metrics, employers, dates, or tools.",
+          "Use the target role and job description when available.",
+          "Keep the tone professional, concise, specific, and believable.",
+          "Return valid JSON only in this shape:",
+          "{\"recipientName\":\"\",\"company\":\"\",\"targetRole\":\"\",\"hiringManager\":\"\",\"opening\":\"\",\"body\":\"\",\"closing\":\"\",\"signatureName\":\"\",\"notes\":\"\"}"
+        ].join("\n"),
+        [
+          `CV:\n${buildCurrentResumeTextForAi()}`,
+          `Target Job Title: ${state.targeting.targetRole || draft?.targetRole || ""}`,
+          `Target Job Description:\n${state.ats.jobDescription || ""}`,
+          `Current Draft: ${JSON.stringify(draft || {})}`,
+          "Write a stronger, role-aware cover letter draft for this exact resume."
+        ].join("\n\n")
+      );
+      return { success: true, draft: structured };
+    });
+    return response.draft || draft;
+  }
+
+  function buildAiReviewPayload(reviewType) {
+    const quality = state.quality.analysis || analyzeQuality(state.data, state.targeting, state.ats.jobDescription);
+    const ats = state.ats.analysis || analyzeJobDescription(state.data, state.ats.jobDescription);
+    return {
+      reviewType,
+      provider: state.ai.provider,
+      apiKey: state.ai.apiKey,
+      model: getResolvedAiModel(),
+      cvText: buildCurrentResumeTextForAi(),
+      jobTitle: state.targeting.targetRole || "",
+      jobDescription: state.ats.jobDescription || "",
+      qualitySummary: {
+        scores: quality?.scores || {},
+        topProblems: (quality?.topProblems || []).slice(0, 10),
+        weakestBullets: (quality?.weakBullets || []).slice(0, 6)
+      },
+      atsSummary: {
+        score: ats?.score || 0,
+        summary: ats?.summary || "",
+        matchedKeywords: ats?.matchedKeywords || [],
+        missingKeywords: ats?.missingKeywords || [],
+        weakSections: ats?.weakSections || []
+      }
+    };
+  }
+
+  async function requestAiReview(reviewType) {
+    const payload = buildAiReviewPayload(reviewType);
+    return requestApiTask("/ai-review", payload, async () => {
+      const systemPrompts = {
+        quality: [
+          "You are an experienced recruiter-grade resume reviewer.",
+          "Evaluate this specific CV only.",
+          "Do not invent facts or achievements.",
+          "Return valid JSON only with this shape:",
+          "{\"summary\":\"\",\"scores\":{\"overall\":0,\"atsMatch\":0,\"recruiterImpact\":0,\"writingStrength\":0,\"evidenceMetrics\":0,\"roleRelevance\":0},\"topProblems\":[\"\"],\"strongestPoints\":[\"\"],\"recommendations\":[\"\"],\"rewrittenSuggestions\":[{\"title\":\"\",\"before\":\"\",\"after\":\"\"}]}"
+        ].join("\n"),
+        ats: [
+          "You are a strict ATS and recruiter reviewer.",
+          "Evaluate this specific CV against the target job title and job description when provided.",
+          "Do not invent facts.",
+          "Return valid JSON only with this shape:",
+          "{\"summary\":\"\",\"scores\":{\"overall\":0,\"atsMatch\":0,\"recruiterImpact\":0,\"writingStrength\":0,\"evidenceMetrics\":0,\"roleRelevance\":0},\"topProblems\":[\"\"],\"strongestPoints\":[\"\"],\"recommendations\":[\"\"],\"rewrittenSuggestions\":[{\"title\":\"\",\"before\":\"\",\"after\":\"\"}]}"
+        ].join("\n"),
+        hr: [
+          "Act as a senior HR recruiter and hiring manager reviewing this CV for real hiring decisions.",
+          "Be direct, honest, and realistic.",
+          "Do not praise unnecessarily.",
+          "Do not invent achievements, fake numbers, or fake impact.",
+          "Return valid JSON only with this shape:",
+          "{\"summary\":\"\",\"scores\":{\"relevance\":0,\"professionalism\":0,\"atsStrength\":0,\"achievementImpact\":0,\"shortlistPotential\":0},\"firstImpression\":\"\",\"roleFit\":{\"strongMatches\":[\"\"],\"weakMatches\":[\"\"]},\"hrReview\":[{\"title\":\"\",\"message\":\"\",\"severity\":\"info\"}],\"atsReview\":[{\"title\":\"\",\"message\":\"\",\"severity\":\"info\"}],\"redFlags\":[\"\"],\"shortlistDecision\":{\"decision\":\"Reject|Maybe|Shortlist\",\"reason\":\"\"},\"improvementRecommendations\":[\"\"],\"rewrittenSuggestions\":[{\"title\":\"\",\"before\":\"\",\"after\":\"\"}]}"
+        ].join("\n")
+      };
+      const userPrompt = [
+        `CV:\n${payload.cvText}`,
+        `Target Job Title:\n${payload.jobTitle || ""}`,
+        `Target Job Description:\n${payload.jobDescription || ""}`,
+        `Local Quality Summary:\n${JSON.stringify(payload.qualitySummary)}`,
+        `Local ATS Summary:\n${JSON.stringify(payload.atsSummary)}`
+      ].join("\n\n");
+      const structured = await requestAiJsonDirect(systemPrompts[reviewType], userPrompt);
+      return { success: true, review: structured };
+    });
+  }
+
+  function triggerAiReview(reviewType) {
+    if (!hasAiWorkspaceConfig()) {
+      setAiReviewState(reviewType, {
+        loading: false,
+        error: locale.aiRequiresKey,
+        result: null
+      });
+      renderEditor();
+      return;
+    }
+
+    setAiReviewState(reviewType, {
+      loading: true,
+      error: "",
+      result: null
+    });
+    renderEditor();
+
+    Promise.resolve()
+      .then(() => requestAiReview(reviewType))
+      .then((payload) => {
+        setAiReviewState(reviewType, {
+          loading: false,
+          error: "",
+          result: payload.review || null
+        });
+        renderEditor();
+      })
+      .catch((error) => {
+        setAiReviewState(reviewType, {
+          loading: false,
+          error: error.message || locale.aiRequestFailed,
+          result: null
+        });
+        renderEditor();
+      });
   }
 
   async function handleGenerateArabicReview(existingContext = getLinkedArabicContext(getSelectedPreset())) {
@@ -6896,42 +7320,52 @@
   }
 
   async function requestArabicTranslation({ sourceVersion, sourcePayload, targetVersion, existingArabicPayload, mode, requestedSections }) {
-    if (!pdfHelperOrigin) {
-      throw new Error(locale.hostedApiMissing);
-    }
-
-    const ready = await refreshPdfHelperStatus();
-    if (!ready) {
-      throw new Error(runningLocally ? locale.pdfHelperOfflineMessage : locale.hostedApiOfflineMessage);
-    }
-
-    const response = await fetch(`${pdfHelperOrigin}/translate-version`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
+    const payload = await requestApiTask("/translate-version", {
+      provider: state.ai.provider,
+      apiKey: state.ai.apiKey,
+      model: getResolvedAiModel(),
+      sourceLanguage: "en",
+      targetLanguage: "ar",
+      mode,
+      sourceVersion: {
+        id: sourceVersion?.id || "",
+        name: sourceVersion?.name || ""
       },
-      body: JSON.stringify({
-        provider: state.ai.provider,
-        apiKey: state.ai.apiKey,
-        model: state.ai.model,
-        sourceLanguage: "en",
-        targetLanguage: "ar",
-        mode,
-        sourceVersion: {
-          id: sourceVersion?.id || "",
-          name: sourceVersion?.name || ""
-        },
-        requestedSections,
-        sections: sourcePayload.sections,
-        existingArabic: existingArabicPayload,
-        jobDescription: state.ats.jobDescription || ""
-      })
+      requestedSections,
+      sections: sourcePayload.sections,
+      existingArabic: existingArabicPayload,
+      jobDescription: state.ats.jobDescription || ""
+    }, async () => {
+      const structured = await requestAiJsonDirect(
+        [
+          "You localize resumes from English into strong, native, ATS-friendly Arabic.",
+          "Never invent facts.",
+          "Preserve names, dates, email, phone, phoneHref, linkedinHref, and URLs exactly unless the field is clearly display-only.",
+          "Keep certification titles, product names, and technical terms in English when a literal Arabic rendering would sound weak or unnatural.",
+          "Rewrite naturally in Arabic rather than translating literally.",
+          "Return valid JSON only.",
+          "Only include the requested section keys in the sections object.",
+          "For coverLetter, return a structured object with recipientName, company, targetRole, hiringManager, opening, body, closing, signatureName, notes, generatedAt.",
+          "Return JSON in this shape: {\"sections\": {...}, \"notes\": {...}}"
+        ].join("\n"),
+        [
+          "Source language: en",
+          "Target language: ar",
+          `Mode: ${String(mode || "sync")}`,
+          `Source version: ${JSON.stringify({ id: sourceVersion?.id || "", name: sourceVersion?.name || "" })}`,
+          `Requested sections: ${JSON.stringify(requestedSections || [])}`,
+          `Job description: ${String(state.ats.jobDescription || "")}`,
+          `English sections: ${JSON.stringify(sourcePayload.sections || {})}`,
+          `Existing Arabic context: ${JSON.stringify(existingArabicPayload || {})}`,
+          "Localize each requested section into polished Arabic while preserving all facts exactly."
+        ].join("\n")
+      );
+      return {
+        success: true,
+        sections: structured?.sections || {},
+        notes: structured?.notes || {}
+      };
     });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.success === false) {
-      throw new Error(payload?.error || locale.translationFailed);
-    }
 
     return {
       sections: payload.sections || {},
@@ -7420,6 +7854,7 @@
       sections: locale.sectionsNavLabel,
       style: locale.styleNavLabel,
       commands: locale.commandsNavLabel,
+      aiHr: locale.aiHrNavLabel,
       coverLetter: locale.coverLetterNavLabel,
       professionalExperience: state.data.labels.professionalExperience,
       internships: state.data.labels.internships,
@@ -7813,18 +8248,21 @@
       const provider = parsed?.provider || parsed?.apiKey
         ? normalizeAiProvider(parsed?.provider, parsed?.apiKey)
         : "openrouter";
+      const mode = normalizeAiMode(parsed?.mode, provider, parsed?.model);
       return {
         enabled: Boolean(parsed?.enabled),
         apiKey: String(parsed?.apiKey || ""),
         provider,
-        model: String(parsed?.model || getDefaultAiModel(provider))
+        mode,
+        model: String(parsed?.model || getDefaultAiModel(provider, mode))
       };
     } catch (error) {
       return {
         enabled: false,
         apiKey: "",
         provider: "openrouter",
-        model: getDefaultAiModel("openrouter")
+        mode: "auto",
+        model: getDefaultAiModel("openrouter", "auto")
       };
     }
   }
@@ -7927,6 +8365,7 @@
         enabled: state.ai.enabled,
         provider: state.ai.provider,
         apiKey: state.ai.apiKey,
+        mode: state.ai.mode,
         model: state.ai.model
       }));
     } catch (error) {
@@ -7936,26 +8375,114 @@
 
   function normalizeAiProvider(provider, apiKey = "") {
     const normalized = String(provider || "").trim().toLowerCase();
+    if (normalized.startsWith("openrouter")) {
+      return "openrouter";
+    }
     if (normalized === "openrouter" || normalized === "openai") {
       return normalized;
     }
     return String(apiKey || "").trim().startsWith("sk-or-") ? "openrouter" : "openai";
   }
 
-  function getDefaultAiModel(provider) {
-    return normalizeAiProvider(provider) === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini";
+  function normalizeAiMode(mode, provider = "openrouter", model = "") {
+    const normalizedProvider = normalizeAiProvider(provider);
+    const normalizedMode = String(mode || "").trim().toLowerCase();
+    if (normalizedProvider === "openrouter") {
+      if (normalizedMode === "auto" || normalizedMode === "free" || normalizedMode === "manual") {
+        return normalizedMode;
+      }
+      if (String(model || "").trim() === "openrouter/auto") {
+        return "auto";
+      }
+      if (String(model || "").trim() === "openrouter/free") {
+        return "free";
+      }
+      return "manual";
+    }
+    return "manual";
+  }
+
+  function getDefaultAiModel(provider, mode = "manual") {
+    const normalizedProvider = normalizeAiProvider(provider);
+    const normalizedMode = normalizeAiMode(mode, normalizedProvider);
+    if (normalizedProvider === "openrouter") {
+      if (normalizedMode === "auto") {
+        return "openrouter/auto";
+      }
+      if (normalizedMode === "free") {
+        return "openrouter/free";
+      }
+      return "openai/gpt-4.1-mini";
+    }
+    return "gpt-4.1-mini";
+  }
+
+  function getResolvedAiModel(config = state.ai) {
+    const provider = normalizeAiProvider(config?.provider, config?.apiKey);
+    const mode = normalizeAiMode(config?.mode, provider, config?.model);
+    const rawModel = String(config?.model || "").trim();
+    if (provider === "openrouter" && mode !== "manual") {
+      return getDefaultAiModel(provider, mode);
+    }
+    return rawModel || getDefaultAiModel(provider, mode);
   }
 
   function getAiApiKeyPlaceholder(provider) {
     return normalizeAiProvider(provider) === "openrouter" ? "sk-or-v1-..." : "sk-...";
   }
 
-  function getAiModelPlaceholder(provider) {
-    return normalizeAiProvider(provider) === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini";
+  function shouldShowAiModelInput(config = state.ai) {
+    return normalizeAiProvider(config?.provider, config?.apiKey) !== "openrouter"
+      || normalizeAiMode(config?.mode, config?.provider, config?.model) === "manual";
+  }
+
+  function getAiModelPlaceholder(provider, mode = "manual") {
+    return getDefaultAiModel(provider, mode);
+  }
+
+  function applyAiProviderSelection(value) {
+    const [provider, rawMode] = String(value || "").split(":");
+    state.ai.provider = normalizeAiProvider(provider || state.ai.provider, state.ai.apiKey);
+    state.ai.mode = normalizeAiMode(rawMode, state.ai.provider);
+    if (!shouldShowAiModelInput()) {
+      state.ai.model = getDefaultAiModel(state.ai.provider, state.ai.mode);
+    }
+  }
+
+  function createAiReviewState() {
+    return {
+      loading: false,
+      error: "",
+      result: null
+    };
+  }
+
+  function setAiReviewState(type, nextState) {
+    if (!state.aiReviews[type]) {
+      state.aiReviews[type] = createAiReviewState();
+    }
+    Object.assign(state.aiReviews[type], {
+      loading: false,
+      error: "",
+      result: null
+    }, nextState || {});
+  }
+
+  function clearAiReview(type) {
+    setAiReviewState(type, createAiReviewState());
+    renderEditor();
   }
 
   function formatAiHint() {
-    return normalizeAiProvider(state.ai.provider) === "openrouter"
+    const provider = normalizeAiProvider(state.ai.provider, state.ai.apiKey);
+    const mode = normalizeAiMode(state.ai.mode, provider, state.ai.model);
+    if (provider === "openrouter" && mode === "auto") {
+      return locale.aiHintOpenRouterAuto;
+    }
+    if (provider === "openrouter" && mode === "free") {
+      return locale.aiHintOpenRouterFree;
+    }
+    return provider === "openrouter"
       ? locale.aiHintOpenRouter
       : locale.aiHint;
   }
@@ -8418,7 +8945,8 @@
       createAnalysisInsightsSection("Missing Metrics", analysis.missingMetrics, createMetricInsightItem, "Metric coverage looks reasonable right now."),
       createAnalysisInsightsSection("ATS Match Review", analysis.atsMatchReview, createAnalysisSimpleObjectItem, "ATS review needs more context."),
       createRecruiterImpressionSection(analysis.recruiterImpression),
-      createAnalysisInsightsSection("Rewritten Suggestions", analysis.rewrittenSuggestions, createRewriteSuggestionItem, "No rewritten suggestions are needed right now.")
+      createAnalysisInsightsSection("Rewritten Suggestions", analysis.rewrittenSuggestions, createRewriteSuggestionItem, "No rewritten suggestions are needed right now."),
+      renderAiReviewPanel(state.aiReviews.quality, "quality")
     );
   }
 
@@ -8481,7 +9009,87 @@
       createAtsFocusAreas(analysis.focusAreas)
     );
 
+    sections.push(renderAiReviewPanel(state.aiReviews.ats, "ats"));
+
     atsResultsHost.append(...sections);
+  }
+
+  function renderAiReviewPanel(reviewState, reviewType) {
+    const section = document.createElement("section");
+    section.className = "editor-ats__section";
+
+    const title = document.createElement("h3");
+    title.className = "editor-ats__section-title";
+    title.textContent = reviewType === "quality"
+      ? locale.aiQualityReviewTitle
+      : reviewType === "ats"
+        ? locale.aiAtsReviewTitle
+        : locale.aiHrResultsTitle;
+    section.appendChild(title);
+
+    if (reviewState.loading) {
+      section.appendChild(createAtsNotice(locale.aiReviewLoading));
+      return section;
+    }
+
+    if (reviewState.error) {
+      section.appendChild(createAtsNotice(reviewState.error, "is-warning"));
+      return section;
+    }
+
+    if (!reviewState.result) {
+      section.appendChild(createAtsNotice(
+        reviewType === "quality"
+          ? locale.aiQualityReviewEmpty
+          : reviewType === "ats"
+            ? locale.aiAtsReviewEmpty
+            : locale.aiHrReviewEmpty
+      ));
+      return section;
+    }
+
+    const result = reviewState.result;
+    if (result.scores) {
+      if (reviewType === "hr") {
+        section.appendChild(createCustomScoreSection(locale.aiReviewScoresTitle, [
+          { label: "Relevance", value: result.scores?.relevance },
+          { label: "Professionalism", value: result.scores?.professionalism },
+          { label: "ATS strength", value: result.scores?.atsStrength },
+          { label: "Achievement impact", value: result.scores?.achievementImpact },
+          { label: "Overall shortlist potential", value: result.scores?.shortlistPotential }
+        ], result.summary || ""));
+      } else {
+        section.appendChild(createAnalysisScoreSection(locale.aiReviewScoresTitle, result.scores, result.summary || ""));
+      }
+    } else if (result.summary) {
+      section.appendChild(createAtsNotice(result.summary));
+    }
+
+    if (reviewType === "hr") {
+      if (result.firstImpression) {
+        section.appendChild(createAtsSignalSection(locale.aiHrFirstImpression, [result.firstImpression]));
+      }
+      section.appendChild(createAtsSignalSection(locale.aiHrRoleFit, [
+        ...(result.roleFit?.strongMatches?.length ? [`Strong matches: ${result.roleFit.strongMatches.join(", ")}`] : []),
+        ...(result.roleFit?.weakMatches?.length ? [`Weak matches: ${result.roleFit.weakMatches.join(", ")}`] : [])
+      ]));
+      section.appendChild(createAtsSignalSection(locale.aiHrShortlistDecision, [
+        result.shortlistDecision?.decision ? `Decision: ${result.shortlistDecision.decision}` : "",
+        result.shortlistDecision?.reason || ""
+      ]));
+      section.appendChild(createAnalysisInsightsSection(locale.aiHrHrReviewSection, normalizeAiObjectItems(result.hrReview, "HR note"), createAnalysisSimpleObjectItem, locale.atsNothingToShow));
+      section.appendChild(createAnalysisInsightsSection(locale.aiHrAtsReviewSection, normalizeAiObjectItems(result.atsReview, "ATS note"), createAnalysisSimpleObjectItem, locale.atsNothingToShow));
+      section.appendChild(createAnalysisInsightsSection(locale.aiHrRedFlagsSection, result.redFlags || [], createAnalysisSimpleItem, locale.atsNothingToShow));
+      section.appendChild(createAnalysisInsightsSection(locale.aiHrImprovementsSection, result.improvementRecommendations || [], createAnalysisSimpleItem, locale.atsNothingToShow));
+      section.appendChild(createAnalysisInsightsSection(locale.aiHrRewritesSection, normalizeAiRewriteItems(result.rewrittenSuggestions), createRewriteSuggestionItem, locale.atsNothingToShow));
+      return section;
+    }
+
+    section.appendChild(createAnalysisInsightsSection(locale.aiReviewTopProblemsTitle, result.topProblems || [], createAnalysisSimpleItem, locale.atsNothingToShow));
+    section.appendChild(createAnalysisInsightsSection(locale.aiReviewStrongestPointsTitle, result.strongestPoints || [], createAnalysisSimpleItem, locale.atsNothingToShow));
+    section.appendChild(createAnalysisInsightsSection(locale.aiReviewRecommendationsTitle, result.recommendations || [], createAnalysisSimpleItem, locale.atsNothingToShow));
+    section.appendChild(createAnalysisInsightsSection(locale.aiReviewRewritesTitle, normalizeAiRewriteItems(result.rewrittenSuggestions), createRewriteSuggestionItem, locale.atsNothingToShow));
+    return section;
   }
 
   function createAtsScoreCard(analysis) {
@@ -8672,6 +9280,33 @@
     return section;
   }
 
+  function createCustomScoreSection(titleText, items, metaText = "") {
+    const section = document.createElement("section");
+    section.className = "editor-ats__section";
+
+    const title = document.createElement("h3");
+    title.className = "editor-ats__section-title";
+    title.textContent = titleText;
+
+    const list = document.createElement("div");
+    list.className = "editor-ats__list";
+
+    (items || [])
+      .filter((item) => Number.isFinite(item?.value))
+      .forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "editor-ats__list-item";
+        row.innerHTML = `<strong>${escapeHtml(item.label || "")}</strong><span>${escapeHtml(`${item.value}/10`)}</span>`;
+        list.appendChild(row);
+      });
+
+    section.append(title, list);
+    if (metaText) {
+      section.appendChild(createAtsNotice(metaText));
+    }
+    return section;
+  }
+
   function createAnalysisInsightsSection(titleText, items, renderer, emptyText) {
     const section = document.createElement("section");
     section.className = "editor-ats__section";
@@ -8691,6 +9326,31 @@
     items.forEach((item) => list.appendChild(renderer(item)));
     section.appendChild(list);
     return section;
+  }
+
+  function normalizeAiObjectItems(items, fallbackTitle = "Note") {
+    return (items || []).map((item) => {
+      if (typeof item === "string") {
+        return {
+          title: fallbackTitle,
+          message: item,
+          severity: "info"
+        };
+      }
+      return {
+        title: item?.title || fallbackTitle,
+        message: item?.message || item?.summary || "",
+        severity: item?.severity || "info"
+      };
+    });
+  }
+
+  function normalizeAiRewriteItems(items) {
+    return (items || []).map((item, index) => ({
+      title: item?.title || `Rewrite ${index + 1}`,
+      before: item?.before || "",
+      after: item?.after || item?.replacement || ""
+    })).filter((item) => item.before || item.after);
   }
 
   function createAnalysisFindingItem(item) {
@@ -12101,12 +12761,52 @@
       aiProvider: baseLocale.aiProvider || (isArabic ? "\u0645\u0632\u0648\u062f AI" : "AI provider"),
       aiProviderOpenAi: baseLocale.aiProviderOpenAi || "OpenAI",
       aiProviderOpenRouter: baseLocale.aiProviderOpenRouter || "OpenRouter",
+      aiProviderOpenRouterAuto: baseLocale.aiProviderOpenRouterAuto || "OpenRouter Auto",
+      aiProviderOpenRouterFree: baseLocale.aiProviderOpenRouterFree || "OpenRouter Free",
+      aiProviderOpenRouterManual: baseLocale.aiProviderOpenRouterManual || "OpenRouter Manual",
       aiApiKey: baseLocale.aiApiKey || (isArabic ? "\u0645\u0641\u062a\u0627\u062d API" : "API key"),
       aiApiKeyPlaceholder: baseLocale.aiApiKeyPlaceholder || "sk-...",
       aiModel: baseLocale.aiModel || (isArabic ? "\u0627\u0644\u0646\u0645\u0648\u0630\u062c" : "Model"),
       aiModelPlaceholder: baseLocale.aiModelPlaceholder || "gpt-4o-mini",
       aiHint: baseLocale.aiHint || (isArabic ? "\u064a\u0628\u0642\u0649 \u0627\u0644\u062f\u0639\u0645 \u0627\u0644\u0630\u0643\u064a \u0627\u062e\u062a\u064a\u0627\u0631\u064a\u064b\u0627 \u0648\u064a\u0628\u0642\u0649 \u0627\u0644\u0645\u0641\u062a\u0627\u062d \u0645\u062d\u0644\u064a\u064b\u0627 \u0641\u0642\u0637." : "AI fallback is optional and the key stays local to this browser."),
       aiHintOpenRouter: baseLocale.aiHintOpenRouter || (isArabic ? "\u0627\u0633\u062a\u062e\u062f\u0645 \u0645\u0641\u062a\u0627\u062d OpenRouter \u0645\u0639 \u0646\u0645\u0648\u0630\u062c \u0645\u062b\u0644 openai/gpt-4.1-mini\u060c \u0648\u064a\u0628\u0642\u0649 \u0627\u0644\u0645\u0641\u062a\u0627\u062d \u0645\u062d\u0644\u064a\u064b\u0627 \u0641\u0642\u0637." : "Use your OpenRouter key with a model slug like openai/gpt-4.1-mini. The key stays local to this browser."),
+      aiHintOpenRouterAuto: baseLocale.aiHintOpenRouterAuto || (isArabic ? "\u064a\u0633\u062a\u062e\u062f\u0645 OpenRouter Auto \u0646\u0645\u0648\u0630\u062c openrouter/auto \u0644\u0627\u062e\u062a\u064a\u0627\u0631 \u0623\u0641\u0636\u0644 \u0646\u0645\u0648\u0630\u062c \u062a\u0644\u0642\u0627\u0626\u064a\u064b\u0627." : "OpenRouter Auto uses `openrouter/auto` so OpenRouter chooses the model for you."),
+      aiHintOpenRouterFree: baseLocale.aiHintOpenRouterFree || (isArabic ? "\u064a\u0633\u062a\u062e\u062f\u0645 OpenRouter Free \u0646\u0645\u0648\u0630\u062c openrouter/free \u0644\u0644\u0645\u062f\u0649 \u0627\u0644\u0645\u062c\u0627\u0646\u064a." : "OpenRouter Free uses `openrouter/free` to route to currently available free models."),
+      aiWorkspaceTitle: baseLocale.aiWorkspaceTitle || (isArabic ? "\u0625\u0639\u062f\u0627\u062f\u0627\u062a AI" : "AI Workspace Settings"),
+      aiWorkspaceDescription: baseLocale.aiWorkspaceDescription || (isArabic ? "\u062a\u0633\u062a\u062e\u062f\u0645 \u0647\u0630\u0647 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0644\u0644\u0623\u0648\u0627\u0645\u0631 \u0648\u0627\u0644\u062c\u0648\u062f\u0629 \u0648ATS \u0648AI HR Review \u0648\u0627\u0644\u062e\u0637\u0627\u0628 \u0648\u0627\u0644\u0645\u0632\u0627\u0645\u0646\u0629." : "These AI settings are shared by Commands, Quality, ATS, AI HR Review, cover letter, and Arabic sync."),
+      aiSharedWorkspaceHint: baseLocale.aiSharedWorkspaceHint || (isArabic ? "\u062a\u0639\u062a\u0645\u062f \u0647\u0630\u0647 \u0627\u0644\u0645\u064a\u0632\u0629 \u0639\u0644\u0649 \u0646\u0641\u0633 \u0625\u0639\u062f\u0627\u062f\u0627\u062a AI \u0641\u064a \u062a\u0628\u0648\u064a\u0628 Commands." : "This uses the same AI settings configured in the Commands tab."),
+      aiRequiresKey: baseLocale.aiRequiresKey || (isArabic ? "\u0623\u062f\u062e\u0644 \u0645\u0641\u062a\u0627\u062d API \u0648\u0641\u0639\u0651\u0644 AI \u0623\u0648\u0644\u064b\u0627." : "Enable AI and add an API key first."),
+      aiRequestFailed: baseLocale.aiRequestFailed || (isArabic ? "\u062a\u0639\u0630\u0631 \u0625\u0643\u0645\u0627\u0644 \u0637\u0644\u0628 AI." : "The AI request could not be completed."),
+      aiResponseEmpty: baseLocale.aiResponseEmpty || (isArabic ? "\u0631\u062f AI \u0643\u0627\u0646 \u0641\u0627\u0631\u063a\u064b\u0627." : "The AI response was empty."),
+      aiResponseInvalidJson: baseLocale.aiResponseInvalidJson || (isArabic ? "\u0631\u062f AI \u0644\u0645 \u064a\u0643\u0646 JSON \u0635\u0627\u0644\u062d\u064b\u0627." : "The AI response was not valid JSON."),
+      aiReviewLoading: baseLocale.aiReviewLoading || (isArabic ? "\u062c\u0627\u0631\u064a \u0625\u0639\u062f\u0627\u062f \u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a..." : "Running AI review..."),
+      aiReviewClear: baseLocale.aiReviewClear || (isArabic ? "\u0645\u0633\u062d \u0646\u062a\u064a\u062c\u0629 AI" : "Clear AI result"),
+      aiReviewScoresTitle: baseLocale.aiReviewScoresTitle || (isArabic ? "\u0646\u062a\u0627\u0626\u062c AI" : "AI Scores"),
+      aiReviewTopProblemsTitle: baseLocale.aiReviewTopProblemsTitle || (isArabic ? "\u0623\u0647\u0645 \u0627\u0644\u0645\u0634\u0627\u0643\u0644" : "Top Problems"),
+      aiReviewStrongestPointsTitle: baseLocale.aiReviewStrongestPointsTitle || (isArabic ? "\u0623\u0642\u0648\u0649 \u0627\u0644\u0646\u0642\u0627\u0637" : "Strongest Points"),
+      aiReviewRecommendationsTitle: baseLocale.aiReviewRecommendationsTitle || (isArabic ? "\u0627\u0644\u062a\u0648\u0635\u064a\u0627\u062a" : "Recommendations"),
+      aiReviewRewritesTitle: baseLocale.aiReviewRewritesTitle || (isArabic ? "\u0625\u0639\u0627\u062f\u0627\u062a \u0635\u064a\u0627\u063a\u0629" : "Rewritten Suggestions"),
+      aiQualityReviewRun: baseLocale.aiQualityReviewRun || (isArabic ? "\u0645\u0631\u0627\u062c\u0639\u0629 AI \u0644\u0644\u062c\u0648\u062f\u0629" : "Run AI Quality Review"),
+      aiQualityReviewTitle: baseLocale.aiQualityReviewTitle || (isArabic ? "\u0645\u0631\u0627\u062c\u0639\u0629 AI \u0644\u0644\u062c\u0648\u062f\u0629" : "AI Quality Review"),
+      aiQualityReviewEmpty: baseLocale.aiQualityReviewEmpty || (isArabic ? "\u0634\u063a\u0651\u0644 \u0645\u0631\u0627\u062c\u0639\u0629 AI \u0644\u0631\u0624\u064a\u0629 \u0642\u0631\u0627\u0621\u0629 \u0623\u0630\u0643\u0649 \u0644\u0647\u0630\u0647 \u0627\u0644\u0633\u064a\u0631\u0629." : "Run the AI quality review to get a stricter recruiter-style read of this CV."),
+      aiAtsReviewRun: baseLocale.aiAtsReviewRun || (isArabic ? "\u0645\u0631\u0627\u062c\u0639\u0629 AI \u0644ATS" : "Run AI ATS Review"),
+      aiAtsReviewTitle: baseLocale.aiAtsReviewTitle || (isArabic ? "\u0645\u0631\u0627\u062c\u0639\u0629 AI \u0644ATS" : "AI ATS Review"),
+      aiAtsReviewEmpty: baseLocale.aiAtsReviewEmpty || (isArabic ? "\u0634\u063a\u0651\u0644 \u0645\u0631\u0627\u062c\u0639\u0629 AI \u0644ATS \u0644\u0631\u0624\u064a\u0629 \u0642\u0631\u0627\u0621\u0629 \u0630\u0643\u064a\u0629 \u0644\u0644\u062a\u0637\u0627\u0628\u0642." : "Run the AI ATS review to get a sharper match analysis for this CV."),
+      aiHrNavLabel: baseLocale.aiHrNavLabel || (isArabic ? "AI HR" : "AI HR Review"),
+      aiHrTitle: baseLocale.aiHrTitle || (isArabic ? "AI HR Review" : "AI HR Review"),
+      aiHrDescription: baseLocale.aiHrDescription || (isArabic ? "\u0645\u0631\u0627\u062c\u0639\u0629 \u062d\u0627\u0632\u0645\u0629 \u062a\u062d\u0627\u0643\u064a \u0642\u0631\u0627\u0631 \u0645\u0648\u0638\u0641 HR \u0648\u0645\u062f\u064a\u0631 \u062a\u0648\u0638\u064a\u0641." : "A stricter recruiter and hiring-manager review for real shortlist decisions."),
+      aiHrUsesCurrentCvNotice: baseLocale.aiHrUsesCurrentCvNotice || (isArabic ? "\u062a\u0633\u062a\u062e\u062f\u0645 \u0647\u0630\u0647 \u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629 \u0627\u0644\u0633\u064a\u0631\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0648\u0627\u0644\u0645\u0633\u0645\u0649 \u0627\u0644\u0645\u0633\u062a\u0647\u062f\u0641 \u0648\u0648\u0635\u0641 \u0627\u0644\u0648\u0638\u064a\u0641\u0629." : "This review uses the current CV, target job title, and ATS job description."),
+      aiHrRun: baseLocale.aiHrRun || (isArabic ? "\u062a\u0634\u063a\u064a\u0644 AI HR Review" : "Run AI HR Review"),
+      aiHrResultsTitle: baseLocale.aiHrResultsTitle || (isArabic ? "\u0646\u062a\u064a\u062c\u0629 AI HR Review" : "AI HR Review"),
+      aiHrReviewEmpty: baseLocale.aiHrReviewEmpty || (isArabic ? "\u0634\u063a\u0651\u0644 AI HR Review \u0644\u0631\u0624\u064a\u0629 \u062a\u0642\u064a\u064a\u0645 HR \u0635\u0631\u064a\u062d." : "Run AI HR Review to see a stricter hiring decision review."),
+      aiHrFirstImpression: baseLocale.aiHrFirstImpression || (isArabic ? "\u0627\u0644\u0627\u0646\u0637\u0628\u0627\u0639 \u0627\u0644\u0623\u0648\u0644" : "Overall First Impression"),
+      aiHrRoleFit: baseLocale.aiHrRoleFit || (isArabic ? "\u0645\u0644\u0627\u0621\u0645\u0629 \u0627\u0644\u062f\u0648\u0631" : "Role Fit"),
+      aiHrShortlistDecision: baseLocale.aiHrShortlistDecision || (isArabic ? "\u0642\u0631\u0627\u0631 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0642\u0635\u064a\u0631\u0629" : "Shortlist Decision"),
+      aiHrHrReviewSection: baseLocale.aiHrHrReviewSection || (isArabic ? "\u0645\u0631\u0627\u062c\u0639\u0629 HR" : "HR Review"),
+      aiHrAtsReviewSection: baseLocale.aiHrAtsReviewSection || (isArabic ? "\u0645\u0631\u0627\u062c\u0639\u0629 ATS" : "ATS Review"),
+      aiHrRedFlagsSection: baseLocale.aiHrRedFlagsSection || (isArabic ? "\u0627\u0644\u0639\u0644\u0627\u0645\u0627\u062a \u0627\u0644\u062d\u0645\u0631\u0627\u0621" : "Red Flags"),
+      aiHrImprovementsSection: baseLocale.aiHrImprovementsSection || (isArabic ? "\u0623\u0648\u0644\u0648\u064a\u0627\u062a \u0627\u0644\u062a\u062d\u0633\u064a\u0646" : "Improvement Recommendations"),
+      aiHrRewritesSection: baseLocale.aiHrRewritesSection || (isArabic ? "\u0627\u0644\u0635\u064a\u0627\u063a\u0627\u062a \u0627\u0644\u0645\u0642\u062a\u0631\u062d\u0629" : "Rewritten Suggestions"),
       rewriteSuggest: baseLocale.rewriteSuggest || (isArabic ? "\u0627\u0642\u062a\u0631\u062d \u0635\u064a\u0627\u063a\u0629" : "Suggest rewrite"),
       rewriteApply: baseLocale.rewriteApply || (isArabic ? "\u062a\u0637\u0628\u064a\u0642" : "Apply"),
       rewriteRegenerate: baseLocale.rewriteRegenerate || (isArabic ? "\u0625\u0639\u0627\u062f\u0629 \u062a\u0648\u0644\u064a\u062f" : "Regenerate"),

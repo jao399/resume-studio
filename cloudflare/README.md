@@ -5,6 +5,8 @@ This worker hosts the helper endpoints used by the public GitHub Pages site:
 - `GET /health`
 - `POST /command-plan`
 - `POST /translate-version`
+- `POST /cover-letter-draft`
+- `POST /ai-review`
 
 ## Deploy
 
@@ -20,6 +22,7 @@ wrangler deploy
 
 ## Notes
 
+- The live GitHub Pages site can now use AI directly from the browser with the user's own OpenRouter or OpenAI key, so this worker is optional rather than required.
 - The browser still owns the user-entered API key.
 - The worker does not store user keys.
 - Hosted PDF export should use the browser print dialog.
