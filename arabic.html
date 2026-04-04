@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" dir="ltr">
+<html lang="ar" dir="rtl">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
     <script src="./runtime-config.js"></script>
-    <title>Resume Studio Demo Resume</title>
+    <title>السيرة الذاتية التجريبية - Resume Studio</title>
     <script>
       (function () {
         const bust = Date.now();
@@ -24,36 +24,37 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside id="editorSidebar" class="editor-sidebar" aria-label="Resume editor"></aside>
+      <aside id="editorSidebar" class="editor-sidebar" aria-label="محرر السيرة الذاتية"></aside>
       <section class="workspace">
-        <div class="screen-toolbar" aria-label="Resume actions">
-          <nav class="screen-toolbar__switcher" aria-label="Language switcher">
-            <a id="switchEnglish" class="screen-toolbar__link is-active" href="./index.html">English</a>
-            <a id="switchArabic" class="screen-toolbar__link" href="./arabic.html">العربية</a>
+        <div class="screen-toolbar" aria-label="إجراءات السيرة الذاتية">
+          <nav class="screen-toolbar__switcher" aria-label="تبديل اللغة">
+            <a id="switchEnglish" class="screen-toolbar__link" href="./index.html">English</a>
+            <a id="switchArabic" class="screen-toolbar__link is-active" href="./arabic.html">العربية</a>
           </nav>
           <div class="screen-toolbar__actions">
             <button id="toggleEditorButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">
-              Editor
+              المحرر
             </button>
             <button id="importDataButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">
-              Import data
+              استيراد البيانات
             </button>
             <button id="exportDataButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">
-              Export data
+              تصدير البيانات
             </button>
             <button id="saveLivePdfButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">
-              Save PDF Now
+              حفظ PDF مباشرة
             </button>
             <button id="printPdfButton" class="screen-toolbar__button" type="button">
-              Print / Save PDF
+              طباعة / حفظ PDF
             </button>
           </div>
-          <div class="screen-toolbar__zoom" aria-label="Preview zoom controls">
+          <p id="printPdfHint" class="screen-toolbar__hint">A4، مع الخلفيات، بدون رؤوس وتذييلات</p>
+          <div class="screen-toolbar__zoom" aria-label="عناصر تقريب المعاينة">
             <button
               id="zoomOutButton"
               class="screen-toolbar__button screen-toolbar__button--secondary screen-toolbar__zoom-button"
               type="button"
-              aria-label="Zoom out"
+              aria-label="تصغير"
             >
               -
             </button>
@@ -61,7 +62,7 @@
               id="zoomResetButton"
               class="screen-toolbar__button screen-toolbar__button--secondary screen-toolbar__zoom-readout"
               type="button"
-              aria-label="Reset preview zoom"
+              aria-label="إعادة ضبط التقريب"
             >
               100%
             </button>
@@ -69,12 +70,11 @@
               id="zoomInButton"
               class="screen-toolbar__button screen-toolbar__button--secondary screen-toolbar__zoom-button"
               type="button"
-              aria-label="Zoom in"
+              aria-label="تكبير"
             >
               +
             </button>
           </div>
-          <p id="printPdfHint" class="screen-toolbar__hint">A4, background on, headers off</p>
           <input
             id="importDataInput"
             type="file"
@@ -88,7 +88,7 @@
             hidden
           >
         </div>
-        <main id="resume" class="resume-shell" aria-label="Resume"></main>
+        <main id="resume" class="resume-shell" aria-label="السيرة الذاتية"></main>
       </section>
     </div>
     <script>
@@ -98,7 +98,7 @@
         const override = params.get("override");
         const dataScript = override
           ? override + (override.indexOf("?") >= 0 ? "&" : "?") + "v=" + bust
-          : "./resume-data.js?v=" + bust;
+          : "./resume-data-ar.js?v=" + bust;
         const scripts = [dataScript, "./resume.js?v=" + bust];
         scripts.forEach(function (src) {
           const script = document.createElement("script");

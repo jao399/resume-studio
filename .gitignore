@@ -1,3 +1,14 @@
 Thumbs.db
 .DS_Store
 *.log
+.local-trash/
+test-results/
+*.pdf
+*.docx
+*.vbs
+*.pyc
+__pycache__/
+*-import.json
+*version-bundle*.json
+assets/profile.png
+private-data/
