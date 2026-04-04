@@ -1,165 +1,177 @@
 window.resumeData = {
+  meta: {
+    lang: "en",
+    dir: "ltr",
+    documentTitle: "Sara Al-Najjar Demo Resume"
+  },
+  ui: {
+    printButton: "Print / Save PDF",
+    printHint: "A4, scale 100%, background on, headers off",
+    switchEnglish: "English",
+    switchArabic: "العربية"
+  },
+  labels: {
+    summary: "Professional Summary",
+    professionalExperience: "Professional Experience",
+    internships: "Internships",
+    projects: "Projects",
+    education: "Education",
+    certificates: "Certifications",
+    skills: "Core Skills",
+    softSkills: "Soft Skills"
+  },
   profile: {
-    name: "Amgad Hussein Alzomi",
-    photo: "./assets/profile.png",
-    email: "amgadalzomi@gmail.com",
-    phone: "(+966) 530788255",
-    phoneHref: "tel:+966530788255",
-    location: "Saudi Arabia",
-    linkedinLabel: "linkedin.com/in/amjad00",
-    linkedinHref: "https://www.linkedin.com/in/amjad00"
+    name: "Sara Al-Najjar",
+    photo: "./assets/profile-demo.svg",
+    email: "sara.najjar@example.com",
+    phone: "(+971) 555 018 204",
+    phoneHref: "tel:+971555018204",
+    location: "Dubai, United Arab Emirates",
+    linkedinLabel: "linkedin.com/in/sara-al-najjar-demo",
+    linkedinHref: "https://www.linkedin.com/in/sara-al-najjar-demo",
+    githubLabel: "github.com/saranajjar-demo",
+    githubHref: "https://github.com/saranajjar-demo",
+    portfolioLabel: "saranajjar.dev",
+    portfolioHref: "https://saranajjar.dev"
   },
   summary:
-    "An information technology professional with hands-on experience in AI-driven security, network defense, and threat analysis. Skilled in applying reinforcement learning and human feedback to enhance smart honeypot systems and strengthen incident response. Former IT Support Specialist with experience across hardware, software, and network troubleshooting. Known for strong analytical skills, cross-functional collaboration, and a proactive approach to solving complex security challenges.",
-  workHistory: [
+    "Product-minded software and cloud engineer with experience building internal web platforms, automating operational workflows, and supporting secure delivery for distributed teams. Combines frontend and backend implementation, API integration, cloud deployment, and technical documentation to turn manual processes into reliable systems. Strong fit for platform, cloud, and security-adjacent roles that value clear execution, measurable improvement, and cross-functional collaboration.",
+  professionalExperience: [
     {
-      date: "12/2023 - 02/2024",
+      date: "Mar 2024 - Present",
+      location: "Dubai, United Arab Emirates",
+      organization: "Northstar Logistics Cloud Services",
+      role: "Software & Platform Engineer",
+      bullets: [
+        "Built an internal operations platform used by 6 fulfillment teams, replacing spreadsheet-based handoffs with role-based workflows and reducing manual status updates by 40%.",
+        "Developed Node.js and React services for shipment intake, exception handling, and partner integrations across 18 REST endpoints and 4 internal admin modules.",
+        "Automated release and environment checks with GitHub Actions and Google Cloud Run, cutting deployment validation time from 45 minutes to under 15 minutes."
+      ]
+    },
+    {
+      date: "Jan 2022 - Feb 2024",
+      location: "Amman, Jordan",
+      organization: "CedarGate Managed Technology",
+      role: "IT Operations Analyst",
+      bullets: [
+        "Supported endpoint, network, and identity issues for more than 120 employees across hybrid offices, maintaining steady day-to-day service continuity.",
+        "Diagnosed recurring VPN, printer, and device-enrollment incidents, documenting fixes that lowered repeated tickets by 28% over two quarters.",
+        "Coordinated asset tracking, patch windows, and escalation handoffs across Windows, Microsoft 365, and virtualization environments."
+      ]
+    }
+  ],
+  internships: [
+    {
+      date: "Jun 2021 - Sep 2021",
       location: "Remote",
-      organization: "Stanford University",
-      role: "Intern",
+      organization: "BluePeak Security Lab",
+      role: "Cloud Security Intern",
       bullets: [
-        "Completed guided learning and research in AI applications for cybersecurity, including machine learning, cloud security, and digital forensics.",
-        "Participated in lab work, workshops, and collaborative AI-driven research projects."
+        "Reviewed IAM and logging configurations in sandbox cloud labs and wrote remediation notes for common storage and access risks.",
+        "Built simple Python checks for log parsing and alert triage, helping analysts review suspicious events faster during lab exercises."
       ]
     },
     {
-      date: "11/2021 - 10/2023",
-      location: "Saudi Arabia",
-      organization: "Tuba Real Estate",
-      role: "IT Support Specialist",
+      date: "Jan 2021 - May 2021",
+      location: "Amman, Jordan",
+      organization: "Amman Digital Innovation Hub",
+      role: "Software Engineering Intern",
       bullets: [
-        "Delivered technical support across hardware, software, and networks, ensuring reliable performance and quick issue resolution.",
-        "Improved system documentation, infrastructure workflows, and staff training procedures to enhance overall efficiency."
-      ]
-    },
-    {
-      date: "10/2023 - 12/2023",
-      location: "Al-Qassim",
-      organization: "Qassim University",
-      role: "Information Technology Intern",
-      bullets: [
-        "Assisted in server hardening, patching, and security maintenance to improve system reliability.",
-        "Supported secure network operations and resolved hardware, software, and connectivity issues for staff and students."
+        "Prototyped frontend components and API integrations for a citizen-services portal, improving response handling and form reliability.",
+        "Helped test releases, reproduce defects, and update technical documentation for cross-functional delivery teams."
       ]
     }
   ],
   projects: [
     {
-      date: "02/2026 - Present",
-      title: "Iftarak - Web Platform (Project Owner: Nusuk)",
+      date: "Aug 2023 - Jan 2024",
+      title: "IncidentHub - Security Operations Dashboard",
+      linkLabel: "GitHub",
+      linkHref: "https://github.com/saranajjar-demo/incidenthub",
       bullets: [
-        "Leading the design and development of the Iftarak web platform, managing team coordination across frontend, backend, and cloud deployment workflows.",
-        "Driving architecture decisions, feature delivery, and continuous platform optimization to improve scalability, security, and overall user experience."
+        "Built a security dashboard with React, FastAPI, and PostgreSQL to track alerts, playbooks, and investigation notes across simulated incidents.",
+        "Added analyst filters, severity scoring, and audit logs so users could triage noisy events and review response history in one place.",
+        "Containerized the stack with Docker and shipped a demo deployment with CI checks for linting, tests, and seeded demo data."
       ]
     },
     {
-      date: "06/2025 - 10/2025",
-      title: "Smart Honeypot System Using Reinforcement Learning & Human Feedback",
+      date: "Feb 2023 - Jul 2023",
+      title: "RoutePulse - Fleet Delivery Analytics Portal",
+      linkLabel: "Live Demo",
+      linkHref: "https://example.dev/routepulse",
       bullets: [
-        "Developed a dynamic honeypot using reinforcement learning and human feedback to enhance detection and response to malicious traffic.",
-        "Designed multi-agent real-world scenarios to advance AI-driven cybersecurity and automated threat mitigation."
-      ]
-    },
-    {
-      date: "07/2023 - 01/2024",
-      title: "ServiceMate - On-Demand Services Android Application",
-      bullets: [
-        "Built a multi-function Android application with authentication, backend integration, and payment features using Android Studio and Firebase.",
-        "Improved scalability, security, and user experience through performance tuning and cross-device optimization."
+        "Designed a logistics analytics portal that visualized on-time delivery, failed-drop patterns, and driver workload across weekly operations.",
+        "Modeled ETL-ready data structures and lightweight reporting views, enabling faster review of route trends and service exceptions.",
+        "Implemented responsive UI patterns and export-ready reporting screens for operations managers."
       ]
     }
   ],
   education: [
     {
-      date: "09/2019 - 01/2024",
-      location: "Saudi Arabia",
-      degree: "Bachelor of Information Technology",
-      institution: "Qassim University"
+      date: "2022 - 2023",
+      location: "Leeds, United Kingdom",
+      degree: "MSc Cybersecurity and Cloud Systems",
+      institution: "University of Leeds"
     },
     {
-      date: "09/2024 - 10/2025",
-      location: "Kuala Lumpur, Malaysia",
-      degree: "Master of Cybersecurity",
-      institution: "De Montfort University (DMU) & Asia Pacific University (APU), Malaysia"
+      date: "2017 - 2021",
+      location: "Amman, Jordan",
+      degree: "BSc Software Engineering",
+      institution: "Princess Sumaya University for Technology"
     }
   ],
   certificates: [
     {
-      title: "Rocheston - Certified AI Engineer 2025",
-      description:
-        "Gained practical knowledge in AI concepts, machine learning algorithms, and real-world deployment techniques. Designed and developed AI-based solutions for practical business and security applications."
+      title: "Microsoft Azure Administrator Associate | 2024",
+      description: "Administering identities, compute, storage, networking, and governance controls in Azure environments."
     },
     {
-      title: "Microsoft - AI-900: Microsoft Azure AI Fundamentals 2025",
-      description:
-        "Studied machine learning principles and Azure AI services. Demonstrated understanding of AI workloads and cloud-based automation."
+      title: "HashiCorp Terraform Associate | 2024",
+      description: "Infrastructure-as-code concepts, Terraform workflows, state handling, and reusable provisioning practices."
     },
     {
-      title: "JPMorgan Chase & Co. (Forage) - Software Engineering Job Simulation 2025",
-      description:
-        "Completed practical tasks using real-world tools: interfaced with a stock price data feed, used JPMorgan frameworks, and built data visualizations for traders. Bonus: open-source contribution."
+      title: "Google Cybersecurity Certificate | 2023",
+      description: "Security operations, risk assessment, log analysis, and incident response foundations."
     },
     {
-      title: "Harvard University - Introduction to Computer Science 2025",
-      description:
-        "Completed CS50x, including 10 problem sets and 1 final project, strengthening core programming fundamentals and computational thinking. Built stronger coding discipline and analytical thinking for security and automation tasks."
+      title: "AWS Certified Cloud Practitioner | 2023",
+      description: "Cloud service models, shared-responsibility concepts, and practical cost and architecture fundamentals."
     },
     {
-      title: "IBM - Cybersecurity Analyst Professional Certificate 2024",
-      description:
-        "Completed hands-on training in network security, threat intelligence, and incident response. Applied real-world cybersecurity tools and techniques to analyze and mitigate threats."
-    },
-    {
-      title: "Google Cloud - Digital Transformation with Google Cloud 2021",
-      description:
-        "Completed training in cloud technologies, digital transformation, and innovation strategies. Developed knowledge of how Google Cloud solutions enable business modernization, operational efficiency, and scalable digital growth."
+      title: "Splunk Core Certified User | 2023",
+      description: "Searching, reporting, dashboards, and log-driven operational analysis."
     }
   ],
   skills: {
     technical: [
       {
-        label: "Cybersecurity & Monitoring",
-        items: "Firewall configuration, IDS/IPS, SIEM tools, threat analysis, incident response, honeypot engineering"
+        label: "Platform & Web",
+        items: "React, Node.js, Express.js, FastAPI, REST APIs, admin dashboards, role-based workflows"
       },
       {
-        label: "Cloud & Virtualization",
-        items: "Microsoft Azure, cloud security fundamentals, VMware, VirtualBox"
+        label: "Programming & Data",
+        items: "JavaScript, TypeScript, Python, SQL, PostgreSQL, data modeling, automation scripts"
       },
       {
-        label: "Programming & Automation",
-        items: "Python, SQL, C++, Java, machine learning model development, cybersecurity automation"
+        label: "Cloud & DevOps",
+        items: "Google Cloud Run, Azure fundamentals, GitHub Actions, Docker, CI/CD pipelines, environment monitoring"
       },
       {
-        label: "Networking",
-        items: "Network configuration, routing & switching, subnetting, Wireshark, network troubleshooting"
+        label: "Security & IT Ops",
+        items: "IAM basics, SIEM workflows, log analysis, endpoint support, Microsoft 365, virtualization, incident documentation"
       },
       {
-        label: "IT Infrastructure & Support",
-        items: "System troubleshooting, device & endpoint management, user support, Windows & Linux administration"
-      },
-      {
-        label: "Microsoft Technologies",
-        items: "Azure services, Microsoft Office (Word, Excel, PowerPoint), Outlook, Teams, SharePoint, OneDrive"
+        label: "Tools & Collaboration",
+        items: "Git, Jira, Postman, Figma, technical documentation, stakeholder communication"
       }
     ],
     soft: [
-      "Analytical & Critical Thinking",
-      "Problem-Solving & Troubleshooting",
-      "Attention to Detail",
-      "Communication & Technical Reporting",
-      "Teamwork & Cross-Functional Collaboration",
-      "Time Management & Prioritization",
-      "Adaptability & Fast Learning",
-      "Incident Response Mindset",
-      "Risk Awareness & Sound Judgment",
-      "Ownership & Accountability",
-      "Stakeholder Management",
-      "Documentation Discipline",
-      "Prompt Engineering & Requirements Clarification",
-      "Curiosity & Continuous Learning",
-      "Calm Under Pressure",
-      "Decision-Making Under Ambiguity",
-      "Ethical Conduct & Integrity"
+      "Analytical thinking",
+      "Structured troubleshooting",
+      "Clear technical writing",
+      "Cross-functional collaboration",
+      "Prioritization",
+      "Ownership"
     ]
   }
 };
