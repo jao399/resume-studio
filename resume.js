@@ -2140,7 +2140,7 @@
     if (!pdfHelperOrigin) {
       state.pdf.ready = false;
       state.pdf.checking = false;
-      state.pdf.message = runningLocally ? locale.pdfHelperOffline : locale.hostedApiMissing;
+      state.pdf.message = runningLocally ? locale.pdfHelperOffline : locale.hostedPrintReady;
       syncPdfHelperDisplay();
       return false;
     }
@@ -2182,7 +2182,7 @@
     if (printHint) {
       const statusLabel = state.pdf.checking
         ? locale.pdfHelperChecking
-        : (state.pdf.message || (runningLocally ? locale.pdfHelperOffline : locale.hostedApiMissing));
+        : (state.pdf.message || (runningLocally ? locale.pdfHelperOffline : locale.hostedPrintReady));
       printHint.textContent = `${state.data.ui?.printHint || locale.printHint} - ${statusLabel}`;
     }
   }
@@ -12752,6 +12752,7 @@
       pdfHelperOfflineMessage: baseLocale.pdfHelperOfflineMessage || (isArabic ? "\u0645\u0634\u063a\u0644 \u0627\u0644\u0645\u0633\u0627\u0639\u062f \u0627\u0644\u0645\u062d\u0644\u064a \u063a\u064a\u0631 \u0645\u062a\u0627\u062d. \u0634\u063a\u0644 tools/start-pdf-helper.cmd \u062b\u0645 \u062d\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649." : "The local PDF helper is not running. Start `tools/start-pdf-helper.cmd` and try again."),
       hostedApiReady: baseLocale.hostedApiReady || (isArabic ? "\u0627\u0644\u062e\u062f\u0645\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u0636\u0627\u0641\u0629 \u062c\u0627\u0647\u0632\u0629" : "Hosted assistant API ready"),
       hostedApiOffline: baseLocale.hostedApiOffline || (isArabic ? "\u0627\u0644\u062e\u062f\u0645\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u0636\u0627\u0641\u0629 \u063a\u064a\u0631 \u0645\u062a\u0627\u062d\u0629" : "Hosted assistant API unavailable"),
+      hostedPrintReady: baseLocale.hostedPrintReady || (isArabic ? "\u0627\u0644\u0637\u0628\u0627\u0639\u0629 \u0627\u0644\u0645\u0633\u062a\u0636\u0627\u0641\u0629 \u062c\u0627\u0647\u0632\u0629" : "Hosted browser print is ready"),
       hostedApiMissing: baseLocale.hostedApiMissing || (isArabic ? "\u0644\u0645 \u064a\u062a\u0645 \u0625\u0639\u062f\u0627\u062f API \u0644\u0644\u0645\u0648\u0642\u0639 \u0627\u0644\u0645\u0633\u062a\u0636\u0627\u0641" : "Hosted API is not configured for this site"),
       hostedApiOfflineMessage: baseLocale.hostedApiOfflineMessage || (isArabic ? "\u062a\u0639\u0630\u0631 \u0627\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 API \u0627\u0644\u0645\u0633\u062a\u0636\u0627\u0641. \u062a\u062d\u0642\u0642 \u0645\u0646 runtime-config.js \u0648\u0627\u0644\u062e\u062f\u0645\u0629 \u0627\u0644\u062e\u0644\u0641\u064a\u0629." : "Could not reach the hosted API. Check `runtime-config.js` and the deployed backend."),
       pdfPrintPreferredMessage: baseLocale.pdfPrintPreferredMessage || (isArabic ? "\u0641\u064a \u0627\u0644\u0645\u0648\u0642\u0639 \u0627\u0644\u0645\u0633\u062a\u0636\u0627\u0641\u060c \u064a\u062a\u0645 \u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0637\u0628\u0627\u0639\u0629 \u0627\u0644\u0645\u062a\u0635\u0641\u062d \u0644\u062d\u0641\u0638 PDF." : "On the hosted site, use the browser print dialog to save PDF."),
