@@ -476,7 +476,9 @@
     if (state.data.meta) {
       document.documentElement.lang = state.data.meta.lang || "en";
       document.documentElement.dir = state.data.meta.dir || "ltr";
-      document.title = state.data.meta.documentTitle || document.title;
+      if (forcedDocumentMode !== "cover-letter" && state.documentMode !== "cover-letter") {
+        document.title = state.data.meta.documentTitle || document.title;
+      }
     }
 
     applyStylePreset();

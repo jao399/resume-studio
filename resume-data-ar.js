@@ -2,7 +2,7 @@ window.resumeData = {
   meta: {
     lang: "ar",
     dir: "rtl",
-    documentTitle: "سيرة سارة النجار التجريبية"
+    documentTitle: "Resume Studio - السيرة الذاتية العربية"
   },
   ui: {
     printButton: "طباعة / حفظ PDF",

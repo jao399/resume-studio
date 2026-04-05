@@ -2,7 +2,7 @@ window.resumeData = {
   meta: {
     lang: "en",
     dir: "ltr",
-    documentTitle: "Sara Al-Najjar Demo Resume"
+    documentTitle: "Resume Studio - English Resume Demo"
   },
   ui: {
     printButton: "Print / Save PDF",
