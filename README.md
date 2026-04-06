@@ -2,9 +2,27 @@
 
 `Resume Studio` is a bilingual resume and cover-letter editor with live preview, recruiter-style analysis, ATS matching, AI HR review, version history, section drag-and-drop, and Arabic/English workflows.
 
-Open:
+## Live Website
+
+- Public site: [https://jao399.github.io/resume-studio/](https://jao399.github.io/resume-studio/)
+- English editor: [https://jao399.github.io/resume-studio/](https://jao399.github.io/resume-studio/)
+- Arabic editor: [https://jao399.github.io/resume-studio/arabic.html](https://jao399.github.io/resume-studio/arabic.html)
+
+Open locally:
 - `index.html` for the English editor
 - `arabic.html` for the Arabic RTL editor
+
+## Main Features
+
+- Live bilingual CV editing with English and Arabic workflows
+- A4-friendly print and PDF export support
+- Recruiter-style `Quality` analysis and `ATS Helper`
+- `AI HR Review` for stricter hiring-style evaluation
+- `Commands` workspace for bulk section updates
+- Version history with import/export support
+- Cover letter editing and export pages
+- Preview-based drag-and-drop for sections and items
+- Per-version visual style presets
 
 ## Public Demo Data
 
@@ -77,7 +95,7 @@ This repo is prepared for:
 
 ### AI on the Hosted Site
 
-- The live site can use AI directly from the browser with the user’s own key.
+- The live site can use AI directly from the browser with the user's own key.
 - Supported modes now include:
   - `OpenRouter Auto`
   - `OpenRouter Free`
@@ -108,10 +126,14 @@ window.resumeRuntimeConfig = {
 };
 ```
 
-### Hosted behavior
+### Hosted Behavior
 
 - `Print / Save PDF` is the primary hosted PDF path
 - `Save PDF Now` remains for local helper mode
 - English PDF autofill works in the browser on the hosted site
-- AI features can run directly in the browser with the user’s own key
+- AI features can run directly in the browser with the user's own key
 - If the Cloudflare worker is deployed, the hosted app can use it for helper/proxy routes too
+
+## Credits
+
+- Amjad Alzomi
