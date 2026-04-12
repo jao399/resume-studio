@@ -8,6 +8,8 @@ test-results/
 *.vbs
 *.pyc
 __pycache__/
+node_modules/
+dist/
 *-import.json
 *version-bundle*.json
 assets/profile.png

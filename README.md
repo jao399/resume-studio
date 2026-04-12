@@ -9,8 +9,9 @@
 - Arabic editor: [https://jao399.github.io/resume-studio/arabic.html](https://jao399.github.io/resume-studio/arabic.html)
 
 Open locally:
-- `index.html` for the English editor
-- `arabic.html` for the Arabic RTL editor
+- `npm install`
+- `npm run dev`
+- open the local Vite URL
 
 ## Main Features
 
@@ -29,8 +30,7 @@ Open locally:
 This repo ships with a fictional bilingual sample profile so the app can be published safely as a public demo.
 
 To customize the seeded demo:
-- edit `resume-data.js` for English
-- edit `resume-data-ar.js` for Arabic
+- edit the bilingual demo data in `src/lib/defaults.js`
 - replace `assets/profile-demo.svg` if you want a different neutral avatar
 
 To start from your own resume:
@@ -49,15 +49,14 @@ The `.gitignore` is set to avoid common local exports and runtime artifacts, but
 
 ## Core Files
 
-- `index.html`: English editor and preview
-- `arabic.html`: Arabic editor and preview
-- `cover-letter.html`: English cover letter print/export page
-- `cover-letter-ar.html`: Arabic cover letter print/export page
-- `styles.css`: layout, typography, print, and preset styling
-- `resume-data.js`: English demo content
-- `resume-data-ar.js`: Arabic demo content
-- `resume.js`: rendering, editing, analysis, versions, and workflows
+- `index.html`, `arabic.html`, `cover-letter.html`, `cover-letter-ar.html`: route entry pages for the unified React app
+- `src/App.jsx`: main unified bilingual workspace
+- `src/lib/defaults.js`: UI copy, presets, and seeded demo data
+- `src/lib/model.js`: normalized bilingual resume model and adapters
+- `src/lib/storage.js`: local persistence and legacy import/export migration
+- `src/styles/app.css`: app shell, preview, RTL, theme, and print styling
 - `tools/`: local helper and verification scripts
+- `legacy/vanilla-app/`: archived pre-React frontend files
 
 ## PDF and Helper Notes
 
@@ -92,6 +91,7 @@ This repo is prepared for:
 - The workflow file lives at `.github/workflows/deploy-pages.yml`
 - Push the repo to the `main` branch on GitHub
 - Enable GitHub Pages with GitHub Actions
+- The workflow now installs dependencies, builds the Vite app, and publishes `dist/`
 
 ### AI on the Hosted Site
 
@@ -113,18 +113,7 @@ This repo is prepared for:
 
 - The worker scaffold lives in `cloudflare/`
 - Deploy it with Wrangler if you want a hosted proxy/helper layer
-- Put the deployed worker URL into `runtime-config.js` as `apiOrigin`
-
-Example:
-
-```js
-window.resumeRuntimeConfig = {
-  mode: "auto",
-  apiOrigin: "https://resume-studio-api.your-subdomain.workers.dev",
-  savePdfBehavior: "print",
-  hostedPdfImport: true
-};
-```
+- The current React app does not require a runtime config file for the core hosted experience
 
 ### Hosted Behavior
 
@@ -137,3 +126,7 @@ window.resumeRuntimeConfig = {
 ## Credits
 
 - Amjad Alzomi
+
+## License
+
+Licensed under the MIT License.
