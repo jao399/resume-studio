@@ -67,7 +67,7 @@ export const REFINED_STYLE_TOKENS = {
 export const COPY = {
   en: {
     appTitle: "Resume Studio",
-    tagline: "Bilingual resume editor with analysis, sync, and AI tools.",
+    tagline: "Bilingual resume workspace with centered preview, analysis, sync, and AI tools.",
     navGroups: {
       app: "App",
       settings: "Settings"
@@ -119,7 +119,7 @@ export const COPY = {
     styleDescription: "Style preset is saved per version and applies to screen and print.",
     syncDescription: "Preview selected sections before applying language sync.",
     versionsDescription: "Versions save the full bilingual resume state.",
-    dashboardDescription: "Run the resume workspace, AI review, sharing, and version control from one shell.",
+    dashboardDescription: "One shell for resume editing, centered preview, AI review, sharing, and version control.",
     importData: "Import data",
     exportData: "Export data",
     importVersions: "Import versions",
@@ -221,7 +221,6 @@ export const COPY = {
       dark: "Dark"
     },
     viewOptions: {
-      hideBranding: "Hide Resume Studio label",
       collapseSidebar: "Collapse sidebar",
       focusPreview: "Focus preview"
     },
@@ -236,13 +235,13 @@ export const COPY = {
     nothingToUndo: "Nothing to undo.",
     nothingToRedo: "Nothing to redo.",
     dashboard: {
-      heroTitle: "Build, review, and share bilingual resumes from one workspace.",
-      heroBody: "Resume Studio keeps content, AI review, ATS matching, sync, export, and version history in a single production shell.",
+      heroTitle: "Build, review, and export bilingual resumes from one workspace.",
+      heroBody: "Resume Studio keeps editing, centered preview, ATS analysis, AI review, sync, exports, and version history in a single production shell.",
       primaryCta: "Open resume workspace",
       secondaryCta: "Open AI settings",
       cards: {
         resumes: "Resume workspace",
-        resumesBody: "Edit English and Arabic content, style, layout, and versions.",
+        resumesBody: "Edit English and Arabic content, keep the preview centered, and manage style, layout, and versions.",
         ai: "AI control center",
         aiBody: "Manage providers, prompts, HR review, ATS review, and tailored cover letters.",
         sharing: "Sharing and export",

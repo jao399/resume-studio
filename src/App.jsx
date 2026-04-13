@@ -651,8 +651,39 @@ export default function App({ routeConfig }) {
 
         {uiMessage ? <div className="status-notice"><p>{uiMessage}</p></div> : null}
 
-        <div className={`workspace-shell ${showPreview ? "" : "is-single-column"}`}>
-          <section className="editor-panel">
+        <div className={`workspace-shell ${showPreview ? "workspace-shell--resumes" : "is-single-column"}`}>
+          {showPreview ? <section className="preview-panel preview-panel--resumes">
+            <div className="preview-panel__header">
+              <div>
+                <h2>{t.previewTitle}</h2>
+                <p>{previewLanguage === "ar" ? "RTL preview" : "LTR preview"}</p>
+              </div>
+              <div className="preview-panel__header-actions preview-dock">
+                <ActionDockButton icon="download" label={t.exportJson} onClick={handleExportData} />
+                <ActionDockButton icon="pdf" label={t.printPdf} onClick={() => window.print()} />
+                <ActionDockButton icon="link" label={t.copyUrl} onClick={handleCopyShareUrl} />
+                <ActionDockButton icon="undo" label={t.undo} onClick={handleUndo} />
+                <ActionDockButton icon="redo" label={t.redo} onClick={handleRedo} />
+                <ActionDockButton icon="center" label={t.centerView} isActive={uiPreferences.centerPreview} onClick={() => setUiPreferences((current) => ({ ...current, centerPreview: !current.centerPreview }))} />
+                <ActionDockButton icon="zoomOut" label={t.zoom} onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: Math.max(80, current.previewZoom - 10) }))} />
+                <button type="button" className="action-dock__button action-dock__button--static" onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: 110 }))}>{uiPreferences.previewZoom}%</button>
+                <ActionDockButton icon="zoomIn" label={t.zoom} onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: Math.min(170, current.previewZoom + 10) }))} />
+                <button type="button" className={`topbar__button topbar__button--secondary ${previewLanguage === "en" ? "is-active-toggle" : ""}`} onClick={() => setPreviewLanguage("en")}>{t.languages.en}</button>
+                <button type="button" className={`topbar__button topbar__button--secondary ${previewLanguage === "ar" ? "is-active-toggle" : ""}`} onClick={() => setPreviewLanguage("ar")}>{t.languages.ar}</button>
+              </div>
+            </div>
+            <div className="preview-stage">
+              <PreviewSheet
+                resume={resume}
+                language={previewLanguage}
+                mode={routeConfig.mode}
+                styleTokens={styleTokens}
+                zoom={uiPreferences.previewZoom}
+              />
+            </div>
+          </section> : null}
+
+          <section className={`editor-panel ${showPreview ? "editor-panel--resumes" : ""}`}>
             {activeArea === "dashboard" && (
               <DashboardArea
                 t={t}
@@ -773,37 +804,6 @@ export default function App({ routeConfig }) {
             {activeArea === "jobSearchApi" && <FutureArea t={t} title={t.topAreas.jobSearchApi} body="A future integration point for external job search providers and saved search pipelines." badge={t.dashboard.futureBadge} />}
             {activeArea === "dangerZone" && <DangerZoneArea t={t} resetApp={() => { undoStackRef.current = []; redoStackRef.current = []; const demo = normalizeResume(createDemoResume()); replaceResume(demo, { clearHistory: true }); const fresh = createBilingualVersion(t.demoVersionName, demo); setVersions([fresh]); setSelectedVersionId(fresh.id); }} />}
           </section>
-
-          {showPreview ? <section className="preview-panel">
-            <div className="preview-panel__header">
-              <div>
-                <h2>{t.previewTitle}</h2>
-                <p>{previewLanguage === "ar" ? "RTL preview" : "LTR preview"}</p>
-              </div>
-              <div className="preview-panel__header-actions preview-dock">
-                <ActionDockButton icon="download" label={t.exportJson} onClick={handleExportData} />
-                <ActionDockButton icon="pdf" label={t.printPdf} onClick={() => window.print()} />
-                <ActionDockButton icon="link" label={t.copyUrl} onClick={handleCopyShareUrl} />
-                <ActionDockButton icon="undo" label={t.undo} onClick={handleUndo} />
-                <ActionDockButton icon="redo" label={t.redo} onClick={handleRedo} />
-                <ActionDockButton icon="center" label={t.centerView} isActive={uiPreferences.centerPreview} onClick={() => setUiPreferences((current) => ({ ...current, centerPreview: !current.centerPreview }))} />
-                <ActionDockButton icon="zoomOut" label={t.zoom} onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: Math.max(70, current.previewZoom - 10) }))} />
-                <button type="button" className="action-dock__button action-dock__button--static" onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: 100 }))}>{uiPreferences.previewZoom}%</button>
-                <ActionDockButton icon="zoomIn" label={t.zoom} onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: Math.min(160, current.previewZoom + 10) }))} />
-                <button type="button" className="topbar__button topbar__button--secondary" onClick={() => setPreviewLanguage("en")}>{t.languages.en}</button>
-                <button type="button" className="topbar__button topbar__button--secondary" onClick={() => setPreviewLanguage("ar")}>{t.languages.ar}</button>
-              </div>
-            </div>
-            <div className="preview-stage">
-              <PreviewSheet
-                resume={resume}
-                language={previewLanguage}
-                mode={routeConfig.mode}
-                styleTokens={styleTokens}
-                zoom={uiPreferences.previewZoom}
-              />
-            </div>
-          </section> : null}
         </div>
       </main>
     </div>
@@ -812,10 +812,10 @@ export default function App({ routeConfig }) {
 
 function getAreaDescription(t, activeArea) {
   if (activeArea === "dashboard") {
-    return t.dashboardDescription;
+    return t.dashboard.heroBody;
   }
   if (activeArea === "resumes") {
-    return t.versionsDescription;
+    return t.dashboard.cards.resumesBody;
   }
   if (activeArea === "jobSearch" || activeArea === "jobSearchApi") {
     return t.dashboard.futureBadge;

@@ -1,6 +1,6 @@
 # Resume Studio
 
-`Resume Studio` is a bilingual resume and cover-letter editor with live preview, recruiter-style analysis, ATS matching, AI HR review, version history, section drag-and-drop, and Arabic/English workflows.
+`Resume Studio` is a unified bilingual resume workspace built with React and Vite. It combines resume editing, centered live preview, recruiter-style analysis, ATS matching, AI HR review, JSON import/export, and Arabic/English workflows in one app shell.
 
 ## Live Website
 
@@ -15,15 +15,13 @@ Open locally:
 
 ## Main Features
 
-- Live bilingual CV editing with English and Arabic workflows
-- A4-friendly print and PDF export support
-- Recruiter-style `Quality` analysis and `ATS Helper`
-- `AI HR Review` for stricter hiring-style evaluation
-- `Commands` workspace for bulk section updates
-- Version history with import/export support
-- Cover letter editing and export pages
-- Preview-based drag-and-drop for sections and items
-- Per-version visual style presets
+- Unified dashboard and resume workspace
+- Centered live preview with zoom, undo/redo, JSON export, PDF print, and share URL tools
+- Live bilingual CV editing with English and Arabic content layers
+- A4-friendly print and browser PDF export
+- Recruiter-style `Quality`, `ATS Helper`, and `AI HR Review`
+- `Commands`, sync tools, version history, and cover-letter flows
+- Per-version visual style presets and app-level light/dark/system themes
 
 ## Public Demo Data
 
@@ -58,26 +56,22 @@ The `.gitignore` is set to avoid common local exports and runtime artifacts, but
 - `tools/`: local helper and verification scripts
 - `legacy/vanilla-app/`: archived pre-React frontend files
 
-## PDF and Helper Notes
+## PDF Notes
 
-- `Print / Save PDF` uses browser print with the A4 print styles.
-- `Save PDF Now` uses the local helper bridge started by `tools/start-pdf-helper.cmd`.
-- Cover letter exports use `cover-letter.html` and `cover-letter-ar.html`.
+- `Print / Save PDF` uses browser print with the app's A4 print styles.
+- English and Arabic previews share the same React renderer and print pipeline.
+- Cover letter routes use the same unified app shell with route-specific mode settings.
 
-## Verification
+## Local Verification
 
 Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/verify-analysis-ui.ps1
+npm install
+npm run build
 ```
 
-That smoke test verifies:
-- the `Quality` panel renders all 10 recruiter-analysis sections
-- `Rewritten Suggestions` stays read-only
-- ATS baseline mode works with no job description
-- ATS job-specific mode works with a pasted job description
-- browser runtime errors, console errors, and failed requests are captured
+For a local static preview, serve `dist/` after the build and open the local URL in a browser.
 
 ## Free Live Hosting
 
@@ -118,8 +112,6 @@ This repo is prepared for:
 ### Hosted Behavior
 
 - `Print / Save PDF` is the primary hosted PDF path
-- `Save PDF Now` remains for local helper mode
-- English PDF autofill works in the browser on the hosted site
 - AI features can run directly in the browser with the user's own key
 - If the Cloudflare worker is deployed, the hosted app can use it for helper/proxy routes too
 
