@@ -320,8 +320,8 @@ body[data-sidebar="collapsed"] .studio-app {
 }
 
 .workspace-shell.workspace-shell--resumes {
-  grid-template-columns: minmax(0, 1fr);
-  align-content: start;
+  grid-template-columns: minmax(660px, 1fr) minmax(360px, 430px);
+  align-items: start;
 }
 
 body[data-preview-mode="center"] .workspace-shell {
@@ -339,9 +339,9 @@ body[data-preview-mode="center"] .workspace-shell {
 }
 
 .editor-panel--resumes {
-  max-width: 1320px;
+  max-width: 430px;
   width: 100%;
-  margin-inline: auto;
+  margin-inline: 0;
 }
 
 .preview-panel {
@@ -351,9 +351,9 @@ body[data-preview-mode="center"] .workspace-shell {
 }
 
 .preview-panel--resumes {
-  max-width: 1080px;
+  max-width: 980px;
   width: 100%;
-  margin-inline: auto;
+  margin-inline: auto 0;
 }
 
 body[data-preview-mode="center"] .editor-panel {
@@ -988,6 +988,10 @@ body[data-sidebar="collapsed"] .sidebar-topbar {
 @media (max-width: 1280px) {
   .workspace-shell {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-shell.workspace-shell--resumes {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dashboard-grid,
