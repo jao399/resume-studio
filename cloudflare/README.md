@@ -18,7 +18,7 @@ wrangler deploy
 ```
 
 3. Set `ALLOWED_ORIGIN` to your GitHub Pages origin if you want strict CORS.
-4. Copy the deployed worker URL into `runtime-config.js` as `apiOrigin`.
+4. If you want the React app to call the worker, wire the deployed worker URL into the frontend API settings instead of the archived legacy `runtime-config.js` flow.
 
 ## Notes
 

@@ -10,6 +10,7 @@ test-results/
 __pycache__/
 node_modules/
 dist/
+tmp/
 *-import.json
 *version-bundle*.json
 assets/profile.png

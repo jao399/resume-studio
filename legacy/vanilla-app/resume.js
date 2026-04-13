@@ -11435,6 +11435,9 @@
           );
           break;
         case "education":
+          if ((data.meta?.lang || "").toLowerCase() === "en") {
+            blocks.push(createForceBreak());
+          }
           blocks.push(
             createSectionTitle(entry.title, true, { sectionKey: "education", sectionOrder }),
             ...data.education.map((item, index) => renderEducationItem(item, index))

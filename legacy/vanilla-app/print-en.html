@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>English Resume Print</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="screen-toolbar">
+      <div class="screen-toolbar__switcher">
+        <a id="switchEnglish" class="screen-toolbar__link is-active" href="./print-en.html?print=1">English</a>
+        <a id="switchArabic" class="screen-toolbar__link" href="./print-ar.html?print=1">العربية</a>
+      </div>
+      <div class="screen-toolbar__actions">
+        <button id="toggleEditorButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">Show preview</button>
+        <button id="importDataButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">Import data</button>
+        <button id="exportDataButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">Export data</button>
+        <button id="saveLivePdfButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">Save PDF Now</button>
+        <button id="printPdfButton" class="screen-toolbar__button" type="button">Print / Save PDF</button>
+      </div>
+      <div class="screen-toolbar__zoom">
+        <button id="zoomOutButton" class="screen-toolbar__zoom-button" type="button">-</button>
+        <button id="zoomResetButton" class="screen-toolbar__zoom-readout" type="button">100%</button>
+        <button id="zoomInButton" class="screen-toolbar__zoom-button" type="button">+</button>
+      </div>
+      <p id="printPdfHint" class="screen-toolbar__hint">A4, scale 100%, background on, headers off</p>
+      <input id="importDataInput" type="file" hidden>
+    </div>
+    <div class="app-shell">
+      <aside id="editorSidebar" class="editor-sidebar"></aside>
+      <main class="workspace">
+        <div id="resume" class="resume-shell"></div>
+      </main>
+    </div>
+    <script src="./resume-data.js"></script>
+    <script src="./runtime-config.js"></script>
+    <script src="./resume.js"></script>
+  </body>
+</html>

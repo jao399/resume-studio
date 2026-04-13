@@ -9,104 +9,11 @@
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
-    <script src="./runtime-config.js"></script>
-    <title>Resume Studio - English Resume Editor</title>
-    <script>
-      (function () {
-        const bust = Date.now();
-        const style = document.createElement("link");
-        style.rel = "stylesheet";
-        style.href = "./styles.css?v=" + bust;
-        document.head.appendChild(style);
-      })();
-    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>Resume Studio</title>
   </head>
-  <body>
-    <div class="app-shell">
-      <aside id="editorSidebar" class="editor-sidebar" aria-label="Resume editor"></aside>
-      <section class="workspace">
-        <div class="screen-toolbar" aria-label="Resume actions">
-          <nav class="screen-toolbar__switcher" aria-label="Language switcher">
-            <a id="switchEnglish" class="screen-toolbar__link is-active" href="./index.html">English</a>
-            <a id="switchArabic" class="screen-toolbar__link" href="./arabic.html">العربية</a>
-          </nav>
-          <div class="screen-toolbar__actions">
-            <button id="toggleEditorButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">
-              Editor
-            </button>
-            <button id="importDataButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">
-              Import data
-            </button>
-            <button id="exportDataButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">
-              Export data
-            </button>
-            <button id="saveLivePdfButton" class="screen-toolbar__button screen-toolbar__button--secondary" type="button">
-              Save PDF Now
-            </button>
-            <button id="printPdfButton" class="screen-toolbar__button" type="button">
-              Print / Save PDF
-            </button>
-          </div>
-          <div class="screen-toolbar__zoom" aria-label="Preview zoom controls">
-            <button
-              id="zoomOutButton"
-              class="screen-toolbar__button screen-toolbar__button--secondary screen-toolbar__zoom-button"
-              type="button"
-              aria-label="Zoom out"
-            >
-              -
-            </button>
-            <button
-              id="zoomResetButton"
-              class="screen-toolbar__button screen-toolbar__button--secondary screen-toolbar__zoom-readout"
-              type="button"
-              aria-label="Reset preview zoom"
-            >
-              100%
-            </button>
-            <button
-              id="zoomInButton"
-              class="screen-toolbar__button screen-toolbar__button--secondary screen-toolbar__zoom-button"
-              type="button"
-              aria-label="Zoom in"
-            >
-              +
-            </button>
-          </div>
-          <p id="printPdfHint" class="screen-toolbar__hint">A4, background on, headers off</p>
-          <input
-            id="importDataInput"
-            type="file"
-            accept=".js,.json,application/javascript,text/javascript,application/json"
-            hidden
-          >
-          <input
-            id="importPdfInput"
-            type="file"
-            accept="application/pdf,.pdf"
-            hidden
-          >
-        </div>
-        <main id="resume" class="resume-shell" aria-label="Resume"></main>
-      </section>
-    </div>
-    <script>
-      (function () {
-        const bust = Date.now();
-        const params = new URLSearchParams(window.location.search);
-        const override = params.get("override");
-        const dataScript = override
-          ? override + (override.indexOf("?") >= 0 ? "&" : "?") + "v=" + bust
-          : "./resume-data.js?v=" + bust;
-        const scripts = [dataScript, "./resume.js?v=" + bust];
-        scripts.forEach(function (src) {
-          const script = document.createElement("script");
-          script.src = src;
-          script.async = false;
-          document.body.appendChild(script);
-        });
-      })();
-    </script>
+  <body data-route-ui-language="en" data-route-content-language="en" data-route-preview-language="en" data-route-mode="resume">
+    <div id="root"></div>
+    <script type="module" src="./src/main.jsx"></script>
   </body>
 </html>
