@@ -79,8 +79,7 @@ export const COPY = {
       profile: "Profile",
       preferences: "Preferences",
       authentication: "Authentication",
-      apiKeys: "API Keys",
-      artificialIntelligence: "Artificial Intelligence",
+      apiKeys: "AI & API Keys",
       jobSearchApi: "Job Search API",
       dangerZone: "Danger Zone"
     },
@@ -222,7 +221,9 @@ export const COPY = {
     },
     viewOptions: {
       collapseSidebar: "Collapse sidebar",
-      focusPreview: "Focus preview"
+      focusPreview: "Focus preview",
+      collapseTasks: "Collapse tasks",
+      expandTasks: "Expand tasks"
     },
     versionPlaceholder: "Choose a version",
     newVersionName: "New bilingual version",
@@ -278,8 +279,7 @@ export const COPY = {
       profile: "الملف الشخصي",
       preferences: "التفضيلات",
       authentication: "المصادقة",
-      apiKeys: "مفاتيح API",
-      artificialIntelligence: "الذكاء الاصطناعي",
+      apiKeys: "الذكاء الاصطناعي ومفاتيح API",
       jobSearchApi: "واجهة وظائف API",
       dangerZone: "المنطقة الخطرة"
     },

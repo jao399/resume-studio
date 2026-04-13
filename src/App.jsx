@@ -50,7 +50,6 @@ const TOP_LEVEL_NAV = [
       { key: "preferences", icon: "settings" },
       { key: "authentication", icon: "shield" },
       { key: "apiKeys", icon: "key" },
-      { key: "artificialIntelligence", icon: "brain" },
       { key: "jobSearchApi", icon: "link" },
       { key: "dangerZone", icon: "warning" }
     ]
@@ -64,7 +63,8 @@ const SHARE_HASH_PREFIX = "#resume=";
 export default function App({ routeConfig }) {
   const initial = useMemo(() => loadAppState(), []);
   const routeSearch = useMemo(() => new URLSearchParams(window.location.search), []);
-  const initialArea = routeSearch.get("area") || (routeConfig.mode === "cover-letter" ? "resumes" : "dashboard");
+  const requestedArea = routeSearch.get("area") || (routeConfig.mode === "cover-letter" ? "resumes" : "dashboard");
+  const initialArea = requestedArea === "artificialIntelligence" ? "apiKeys" : requestedArea;
   const initialWorkspaceArea = routeSearch.get("workspace") || (routeConfig.mode === "cover-letter" ? "aiTools" : "content");
   const [resume, setResume] = useState(initial.resume);
   const [versions, setVersions] = useState(initial.versions);
@@ -99,9 +99,13 @@ export default function App({ routeConfig }) {
   const [hrLoading, setHrLoading] = useState(false);
   const [coverLetterStatus, setCoverLetterStatus] = useState("");
   const [uiMessage, setUiMessage] = useState("");
+  const [pendingEditorFocus, setPendingEditorFocus] = useState(null);
   const importRef = useRef(null);
   const undoStackRef = useRef([]);
   const redoStackRef = useRef([]);
+  const resumeShellRef = useRef(null);
+  const resizeStateRef = useRef({ active: false });
+  const previewStageRef = useRef(null);
 
   const t = COPY[uiLanguage];
   const styleTokens = getStyleTokens(resume, previewLanguage, DEFAULT_STYLE_TOKENS, REFINED_STYLE_TOKENS);
@@ -171,6 +175,88 @@ export default function App({ routeConfig }) {
     const timer = window.setTimeout(() => setUiMessage(""), 2600);
     return () => window.clearTimeout(timer);
   }, [uiMessage]);
+
+  useEffect(() => {
+    const canFocusEditorTarget =
+      activeArea === "profile" ||
+      (activeArea === "resumes" && workspaceArea === "content");
+
+    if (!pendingEditorFocus || !canFocusEditorTarget) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      const selector = pendingEditorFocus.itemIndex == null
+        ? `[data-editor-section="${pendingEditorFocus.sectionKey}"]`
+        : `[data-editor-section="${pendingEditorFocus.sectionKey}"][data-editor-index="${pendingEditorFocus.itemIndex}"]`;
+      const target = document.querySelector(selector) || document.querySelector(`[data-editor-section="${pendingEditorFocus.sectionKey}"]`);
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.add("is-editor-focus-target");
+        const focusable = target.querySelector("textarea, input, select, button:not([disabled])");
+        if (focusable instanceof HTMLElement) {
+          focusable.focus({ preventScroll: true });
+        }
+        window.setTimeout(() => target.classList.remove("is-editor-focus-target"), 1800);
+      }
+      setPendingEditorFocus(null);
+    }, 80);
+
+    return () => window.clearTimeout(timer);
+  }, [pendingEditorFocus, activeArea, workspaceArea]);
+
+  useEffect(() => {
+    function handlePointerMove(event) {
+      if (!resizeStateRef.current.active || !resumeShellRef.current) {
+        return;
+      }
+      const bounds = resumeShellRef.current.getBoundingClientRect();
+      const nextWidth = Math.min(560, Math.max(320, bounds.right - event.clientX));
+      setUiPreferences((current) => (
+        current.rightPanelWidth === nextWidth ? current : { ...current, rightPanelWidth: nextWidth }
+      ));
+    }
+
+    function handlePointerUp() {
+      if (!resizeStateRef.current.active) {
+        return;
+      }
+      resizeStateRef.current = { active: false };
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const previewStage = previewStageRef.current;
+    if (!previewStage) {
+      return undefined;
+    }
+
+    function handleWheel(event) {
+      if (!event.ctrlKey) {
+        return;
+      }
+      event.preventDefault();
+      const step = event.deltaY > 0 ? -5 : 5;
+      setUiPreferences((current) => ({
+        ...current,
+        previewZoom: Math.min(170, Math.max(80, current.previewZoom + step))
+      }));
+    }
+
+    previewStage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      previewStage.removeEventListener("wheel", handleWheel);
+    };
+  }, [activeArea]);
 
   function replaceResume(nextResume, options = {}) {
     if (options.clearHistory) {
@@ -267,6 +353,38 @@ export default function App({ routeConfig }) {
     });
   }
 
+  function moveSectionItem(lang, sectionKey, index, direction) {
+    patchResume((draft) => {
+      const list = draft.languages[lang].sections[sectionKey];
+      if (!Array.isArray(list)) {
+        return draft;
+      }
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= list.length) {
+        return draft;
+      }
+      [list[index], list[nextIndex]] = [list[nextIndex], list[index]];
+      return draft;
+    });
+  }
+
+  function jumpToEditorTarget(sectionKey, itemIndex = null, lang = previewLanguage) {
+    if (sectionKey === "profile") {
+      setActiveArea("profile");
+      setUiPreferences((current) => ({ ...current, centerPreview: false, rightPanelCollapsed: false }));
+      setPendingEditorFocus({ sectionKey: "profile", itemIndex: null });
+      return;
+    }
+
+    setActiveArea("resumes");
+    setWorkspaceArea("content");
+    setContentLanguage(lang);
+    setEditMode("single");
+    setActiveSection(sectionKey);
+    setUiPreferences((current) => ({ ...current, centerPreview: false, rightPanelCollapsed: false }));
+    setPendingEditorFocus({ sectionKey, itemIndex });
+  }
+
   function currentVersion() {
     return versions.find((item) => item.id === selectedVersionId) || null;
   }
@@ -344,6 +462,23 @@ export default function App({ routeConfig }) {
     }
     undoStackRef.current = [...undoStackRef.current, clone(resume)];
     setResume(normalizeResume(next));
+  }
+
+  function updatePreviewZoom(nextZoom) {
+    setUiPreferences((current) => ({
+      ...current,
+      previewZoom: Math.min(170, Math.max(80, nextZoom))
+    }));
+  }
+
+  function startRightPanelResize(event) {
+    if (uiPreferences.centerPreview || uiPreferences.rightPanelCollapsed) {
+      return;
+    }
+    resizeStateRef.current = { active: true };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    event.preventDefault();
   }
 
   function handleExportData() {
@@ -557,22 +692,26 @@ export default function App({ routeConfig }) {
   }
 
   const showPreview = activeArea === "resumes";
+  const showRightTasks = showPreview && !uiPreferences.centerPreview && !uiPreferences.rightPanelCollapsed;
+  const shouldHideEditorPanel = showPreview && !showRightTasks;
+  const resumeShellStyle = showPreview
+    ? { "--right-panel-width": `${Math.min(560, Math.max(320, uiPreferences.rightPanelWidth || 430))}px` }
+    : undefined;
   const headerTitle = currentAreaLabel;
   const headerDescription = getAreaDescription(t, activeArea);
 
   return (
     <div className={`studio-app ${uiLanguage === "ar" ? "is-rtl-ui" : ""}`}>
       <aside className="studio-sidebar">
-        <div className="sidebar-topbar">
-          <button
-            type="button"
-            className="sidebar-collapse"
-            aria-label={uiPreferences.collapseSidebar ? "Expand sidebar" : "Collapse sidebar"}
-            onClick={() => setUiPreferences((current) => ({ ...current, collapseSidebar: !current.collapseSidebar }))}
-          >
-            <GlyphIcon name={uiPreferences.collapseSidebar ? "chevronRight" : "chevronLeft"} />
-          </button>
-        </div>
+        <button
+          type="button"
+          className="sidebar-collapse"
+          aria-label={uiPreferences.collapseSidebar ? "Expand sidebar" : "Collapse sidebar"}
+          title={uiPreferences.collapseSidebar ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setUiPreferences((current) => ({ ...current, collapseSidebar: !current.collapseSidebar }))}
+        >
+          <GlyphIcon name={uiPreferences.collapseSidebar ? "chevronRight" : "chevronLeft"} />
+        </button>
         <div className="brand-block">
           <p className="brand-kicker">{t.appTitle}</p>
           <h1>{headerTitle}</h1>
@@ -641,7 +780,6 @@ export default function App({ routeConfig }) {
               ]}
             />
             <div className="topbar__inline-tools">
-              <button type="button" className={`chip ${uiPreferences.centerPreview ? "is-active" : ""}`} onClick={() => setUiPreferences((current) => ({ ...current, centerPreview: !current.centerPreview }))}>{t.centerView}</button>
               <button type="button" className="chip" onClick={handleImportClick}>{t.importData}</button>
               <button type="button" className="chip" onClick={handleExportVersions}>{t.exportVersions}</button>
             </div>
@@ -651,7 +789,11 @@ export default function App({ routeConfig }) {
 
         {uiMessage ? <div className="status-notice"><p>{uiMessage}</p></div> : null}
 
-        <div className={`workspace-shell ${showPreview ? "workspace-shell--resumes" : "is-single-column"}`}>
+        <div
+          ref={resumeShellRef}
+          className={`workspace-shell ${showPreview ? "workspace-shell--resumes" : "is-single-column"} ${showRightTasks ? "workspace-shell--tasks-open" : ""}`}
+          style={resumeShellStyle}
+        >
           {showPreview ? <section className="preview-panel preview-panel--resumes">
             <div className="preview-panel__header">
               <div>
@@ -665,25 +807,69 @@ export default function App({ routeConfig }) {
                 <ActionDockButton icon="undo" label={t.undo} onClick={handleUndo} />
                 <ActionDockButton icon="redo" label={t.redo} onClick={handleRedo} />
                 <ActionDockButton icon="center" label={t.centerView} isActive={uiPreferences.centerPreview} onClick={() => setUiPreferences((current) => ({ ...current, centerPreview: !current.centerPreview }))} />
-                <ActionDockButton icon="zoomOut" label={t.zoom} onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: Math.max(80, current.previewZoom - 10) }))} />
-                <button type="button" className="action-dock__button action-dock__button--static" onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: 110 }))}>{uiPreferences.previewZoom}%</button>
-                <ActionDockButton icon="zoomIn" label={t.zoom} onClick={() => setUiPreferences((current) => ({ ...current, previewZoom: Math.min(170, current.previewZoom + 10) }))} />
+                <ActionDockButton icon="zoomOut" label={t.zoom} onClick={() => updatePreviewZoom(uiPreferences.previewZoom - 10)} />
+                <button type="button" className="action-dock__button action-dock__button--static" onClick={() => updatePreviewZoom(110)}>{uiPreferences.previewZoom}%</button>
+                <ActionDockButton icon="zoomIn" label={t.zoom} onClick={() => updatePreviewZoom(uiPreferences.previewZoom + 10)} />
                 <button type="button" className={`topbar__button topbar__button--secondary ${previewLanguage === "en" ? "is-active-toggle" : ""}`} onClick={() => setPreviewLanguage("en")}>{t.languages.en}</button>
                 <button type="button" className={`topbar__button topbar__button--secondary ${previewLanguage === "ar" ? "is-active-toggle" : ""}`} onClick={() => setPreviewLanguage("ar")}>{t.languages.ar}</button>
               </div>
             </div>
-            <div className="preview-stage">
+            <div ref={previewStageRef} className="preview-stage">
               <PreviewSheet
                 resume={resume}
                 language={previewLanguage}
                 mode={routeConfig.mode}
                 styleTokens={styleTokens}
                 zoom={uiPreferences.previewZoom}
+                onNavigate={jumpToEditorTarget}
+                onMoveSection={moveSectionOrder}
+                onMoveItem={moveSectionItem}
+                activeContentLanguage={contentLanguage}
               />
             </div>
           </section> : null}
 
-          <section className={`editor-panel ${showPreview ? "editor-panel--resumes" : ""}`}>
+          {showRightTasks ? (
+            <button
+              type="button"
+              className="panel-resize-handle"
+              aria-label="Resize tasks panel"
+              title="Resize tasks panel"
+              onPointerDown={startRightPanelResize}
+            >
+              <span />
+            </button>
+          ) : null}
+
+          {showPreview && !uiPreferences.centerPreview && uiPreferences.rightPanelCollapsed ? (
+            <button
+              type="button"
+              className="right-panel-expand"
+              aria-label={t.viewOptions.expandTasks}
+              title={t.viewOptions.expandTasks}
+              onClick={() => setUiPreferences((current) => ({ ...current, rightPanelCollapsed: false }))}
+            >
+              <GlyphIcon name="panelExpand" />
+            </button>
+          ) : null}
+
+          <section className={`editor-panel ${showPreview ? "editor-panel--resumes" : ""} ${shouldHideEditorPanel ? "editor-panel--hidden" : ""}`}>
+            {showPreview ? (
+              <div className="editor-panel__topbar">
+                <strong>{t.editorArea}</strong>
+                {!uiPreferences.centerPreview ? (
+                  <button
+                    type="button"
+                    className="panel-edge-toggle panel-edge-toggle--inline"
+                    aria-label={t.viewOptions.collapseTasks}
+                    title={t.viewOptions.collapseTasks}
+                    onClick={() => setUiPreferences((current) => ({ ...current, rightPanelCollapsed: true }))}
+                  >
+                    <GlyphIcon name="panelCollapse" />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {activeArea === "dashboard" && (
               <DashboardArea
                 t={t}
@@ -799,7 +985,6 @@ export default function App({ routeConfig }) {
             {activeArea === "preferences" && <PreferencesArea t={t} uiLanguage={uiLanguage} setUiLanguage={setUiLanguage} previewLanguage={previewLanguage} setPreviewLanguage={setPreviewLanguage} contentLanguage={contentLanguage} setContentLanguage={setContentLanguage} resume={resume} setStylePreset={(value) => updateSharedField("stylePreset", value)} />}
             {activeArea === "authentication" && <FutureArea t={t} title={t.topAreas.authentication} body="Authentication management will be added in a later release." />}
             {activeArea === "apiKeys" && <AiSettingsCardOnly t={t} title={t.topAreas.apiKeys} aiSettings={aiSettings} setAiSettings={setAiSettings} saveAiSettings={saveAiSettings} />}
-            {activeArea === "artificialIntelligence" && <AiSettingsCardOnly t={t} title={t.topAreas.artificialIntelligence} aiSettings={aiSettings} setAiSettings={setAiSettings} saveAiSettings={saveAiSettings} />}
             {activeArea === "jobSearch" && <FutureArea t={t} title={t.topAreas.jobSearch} body={t.dashboard.cards.jobSearchBody} badge={t.dashboard.futureBadge} />}
             {activeArea === "jobSearchApi" && <FutureArea t={t} title={t.topAreas.jobSearchApi} body="A future integration point for external job search providers and saved search pipelines." badge={t.dashboard.futureBadge} />}
             {activeArea === "dangerZone" && <DangerZoneArea t={t} resetApp={() => { undoStackRef.current = []; redoStackRef.current = []; const demo = normalizeResume(createDemoResume()); replaceResume(demo, { clearHistory: true }); const fresh = createBilingualVersion(t.demoVersionName, demo); setVersions([fresh]); setSelectedVersionId(fresh.id); }} />}
@@ -820,7 +1005,7 @@ function getAreaDescription(t, activeArea) {
   if (activeArea === "jobSearch" || activeArea === "jobSearchApi") {
     return t.dashboard.futureBadge;
   }
-  if (activeArea === "artificialIntelligence" || activeArea === "apiKeys") {
+  if (activeArea === "apiKeys") {
     return t.ai.missing;
   }
   return t.tagline;
@@ -864,7 +1049,7 @@ function DashboardArea({ t, versions, selectedVersionId, setActiveArea }) {
           <p>{t.dashboard.heroBody}</p>
           <div className="dashboard-hero__actions">
             <button type="button" className="topbar__button" onClick={() => setActiveArea("resumes")}>{t.dashboard.primaryCta}</button>
-            <button type="button" className="topbar__button topbar__button--secondary" onClick={() => setActiveArea("artificialIntelligence")}>{t.dashboard.secondaryCta}</button>
+            <button type="button" className="topbar__button topbar__button--secondary" onClick={() => setActiveArea("apiKeys")}>{t.dashboard.secondaryCta}</button>
           </div>
         </div>
         <div className="dashboard-hero__meta">
@@ -876,7 +1061,7 @@ function DashboardArea({ t, versions, selectedVersionId, setActiveArea }) {
 
       <div className="dashboard-grid">
         <DashboardCard title={t.dashboard.cards.resumes} body={t.dashboard.cards.resumesBody} icon="resume" onClick={() => setActiveArea("resumes")} />
-        <DashboardCard title={t.dashboard.cards.ai} body={t.dashboard.cards.aiBody} icon="brain" onClick={() => setActiveArea("artificialIntelligence")} />
+        <DashboardCard title={t.dashboard.cards.ai} body={t.dashboard.cards.aiBody} icon="brain" onClick={() => setActiveArea("apiKeys")} />
         <DashboardCard title={t.dashboard.cards.sharing} body={t.dashboard.cards.sharingBody} icon="link" onClick={() => setActiveArea("resumes")} />
         <DashboardCard title={t.dashboard.cards.jobSearch} body={t.dashboard.cards.jobSearchBody} icon="briefcase" badge={t.dashboard.futureBadge} onClick={() => setActiveArea("jobSearch")} />
       </div>
@@ -902,7 +1087,7 @@ function DashboardCard({ title, body, icon, onClick, badge }) {
 function ProfileArea({ t, resume, contentLanguage, updateSharedField, updateLanguageField }) {
   const source = resume.languages[contentLanguage];
   return (
-    <SectionCard title={t.topAreas.profile} description={t.sharedFields}>
+    <SectionCard title={t.topAreas.profile} description={t.sharedFields} sectionKey="profile">
       <div className="grid-two">
         <InputField label={t.fieldLabels.fullName} value={source.profile.name} onChange={(value) => updateLanguageField(contentLanguage, ["profile", "name"], value)} />
         <InputField label={t.fieldLabels.location} value={source.profile.location} onChange={(value) => updateLanguageField(contentLanguage, ["profile", "location"], value)} />
@@ -993,6 +1178,10 @@ function GlyphIcon({ name }) {
     brain: <path d="M8.2 6a2.2 2.2 0 0 1 4-1.3A2.5 2.5 0 0 1 16 7v5a2.5 2.5 0 0 1-2.5 2.5h-1.2a2.3 2.3 0 0 1-4.5 0H6.5A2.5 2.5 0 0 1 4 12V8.4A2.4 2.4 0 0 1 6.4 6Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />,
     link: <path d="M9.5 14.5 8 16a3 3 0 0 1-4.2-4.2l2.2-2.2A3 3 0 0 1 10.2 10m3.6-4L16 4a3 3 0 0 1 4.2 4.2L18 10.4A3 3 0 0 1 13.8 10M8.8 11.2l6.4-6.4" transform="translate(-4 -1)" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />,
     warning: <path d="M12 4 4.6 17h14.8Zm0 4.5v3.8m0 2.7h.01" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />,
+    panelCollapse: <path d="M15 5 9 12l6 7M9 5v14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />,
+    panelExpand: <path d="m9 5 6 7-6 7M15 5v14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />,
+    moveUp: <path d="m12 6-4 4m4-4 4 4M12 6v12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />,
+    moveDown: <path d="m12 18 4-4m-4 4-4-4m4 4V6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />,
     download: <path d="M12 4v7m0 0 3-3m-3 3-3-3M5 15.5h14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />,
     pdf: <path d="M7 3.5h6l3 3v10a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 6 16.5v-11A2 2 0 0 1 8 3.5Zm1 9.5h8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />,
     undo: <path d="M8 7H4v4m0-4 3.5-3.5M4 7h7a5 5 0 1 1 0 10h-1" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />,
@@ -1110,7 +1299,7 @@ function CompareEditor({ t, resume, sectionKey, updateLanguageField }) {
 function SingleLanguageEditor({ t, lang, source, sectionKey, updateLanguageField, updateListItem, updateBullet, addSectionItem, removeSectionItem }) {
   if (sectionKey === "summary") {
     return (
-      <SectionCard title={source.labels.summary}>
+      <SectionCard title={source.labels.summary} sectionKey="summary">
         <div className="grid-two">
           <InputField label={t.fieldLabels.fullName} value={source.profile.name} onChange={(value) => updateLanguageField(lang, ["profile", "name"], value)} />
           <InputField label={t.fieldLabels.location} value={source.profile.location} onChange={(value) => updateLanguageField(lang, ["profile", "location"], value)} />
@@ -1126,10 +1315,10 @@ function SingleLanguageEditor({ t, lang, source, sectionKey, updateLanguageField
 
   if (sectionKey === "softSkills") {
     return (
-      <SectionCard title={source.labels.softSkills}>
+      <SectionCard title={source.labels.softSkills} sectionKey="softSkills">
         <InputField label={t.fieldLabels.sectionTitle} value={source.labels.softSkills} onChange={(value) => updateLanguageField(lang, ["labels", "softSkills"], value)} />
         {source.sections.softSkills.map((skill, index) => (
-          <InlineRow key={`${sectionKey}-${index}`}>
+          <InlineRow key={`${sectionKey}-${index}`} sectionKey="softSkills" itemIndex={index}>
             <input value={skill} onChange={(event) => updateLanguageField(lang, ["sections", "softSkills", index], event.target.value)} />
             <button type="button" className="icon-button" onClick={() => removeSectionItem(lang, "softSkills", index)}>×</button>
           </InlineRow>
@@ -1141,10 +1330,10 @@ function SingleLanguageEditor({ t, lang, source, sectionKey, updateLanguageField
 
   if (sectionKey === "skills") {
     return (
-      <SectionCard title={source.labels.skills}>
+      <SectionCard title={source.labels.skills} sectionKey="skills">
         <InputField label={t.fieldLabels.sectionTitle} value={source.labels.skills} onChange={(value) => updateLanguageField(lang, ["labels", "skills"], value)} />
         {source.sections.skills.map((item, index) => (
-          <div className="item-card" key={`${sectionKey}-${index}`}>
+          <div className="item-card" key={`${sectionKey}-${index}`} data-editor-section="skills" data-editor-index={index}>
             <InlineRow>
               <strong>{index + 1}</strong>
               <button type="button" className="icon-button" onClick={() => removeSectionItem(lang, "skills", index)}>×</button>
@@ -1169,10 +1358,10 @@ function SingleLanguageEditor({ t, lang, source, sectionKey, updateLanguageField
   const config = configMap[sectionKey];
   const items = source.sections[sectionKey];
   return (
-    <SectionCard title={source.labels[sectionKey] || t[sectionKey]}>
+    <SectionCard title={source.labels[sectionKey] || t[sectionKey]} sectionKey={sectionKey}>
       <InputField label={t.fieldLabels.sectionTitle} value={source.labels[sectionKey]} onChange={(value) => updateLanguageField(lang, ["labels", sectionKey], value)} />
       {items.map((item, index) => (
-        <div className="item-card" key={`${sectionKey}-${index}`}>
+        <div className="item-card" key={`${sectionKey}-${index}`} data-editor-section={sectionKey} data-editor-index={index}>
           <InlineRow>
             <strong>{index + 1}</strong>
             <button type="button" className="icon-button" onClick={() => removeSectionItem(lang, sectionKey, index)}>×</button>
@@ -1507,101 +1696,158 @@ function AiSettingsForm({ t, aiSettings, setAiSettings, saveAiSettings }) {
   );
 }
 
-function PreviewSheet({ resume, language, mode, styleTokens, zoom }) {
+function PreviewSheet({ resume, language, mode, styleTokens, zoom, onNavigate, onMoveSection, onMoveItem, activeContentLanguage }) {
   const style = {
     "--cv-font-family": styleTokens.fontFamily,
     "--cv-name-size": styleTokens.nameSize,
+    "--cv-name-size-first": styleTokens.nameSize,
     "--cv-heading-size": styleTokens.headingSize,
-    "--cv-body-size": styleTokens.bodySize,
+    "--cv-body-copy-size": styleTokens.bodySize,
     "--cv-contact-size": styleTokens.contactSize,
-    "--cv-line-height": styleTokens.lineHeight,
+    "--cv-contact-size-first": styleTokens.contactSize,
+    "--cv-content-line-height": styleTokens.lineHeight,
     transform: `scale(${zoom / 100})`
   };
 
   return (
     <div className={`preview-sheet ${language === "ar" ? "is-rtl" : ""}`} dir={language === "ar" ? "rtl" : "ltr"} style={style}>
       {mode === "cover-letter"
-        ? <CoverLetterPreview resume={resume} language={language} />
-        : <ResumePreview resume={resume} language={language} />}
+        ? <CoverLetterPreview resume={resume} language={language} onNavigate={onNavigate} />
+        : <ResumePreview resume={resume} language={language} onNavigate={onNavigate} onMoveSection={onMoveSection} onMoveItem={onMoveItem} activeContentLanguage={activeContentLanguage} />}
     </div>
   );
 }
 
-function ResumePreview({ resume, language }) {
+function ResumePreview({ resume, language, onNavigate, onMoveSection, onMoveItem }) {
   const source = resume.languages[language];
+  const pages = splitResumePreviewPages(resume.shared.sectionOrder);
   return (
-    <article className="sheet">
-      <header className="sheet-hero">
-        <div>
-          <p className="hero-name">{source.profile.name}</p>
-          <div className="hero-contact-row">
-            <ContactItem label={resume.shared.email} href={`mailto:${resume.shared.email}`} dir="ltr" />
-            <ContactItem label={resume.shared.phone} href={resume.shared.phoneHref} dir="ltr" />
-            <ContactItem label={source.profile.location} />
-            <ContactItem label={source.profile.linkedinLabel} href={resume.shared.linkedinHref} dir="ltr" />
-            <ContactItem label={source.profile.githubLabel} href={resume.shared.githubHref} dir="ltr" />
-            <ContactItem label={source.profile.portfolioLabel} href={resume.shared.portfolioHref} dir="ltr" />
-          </div>
-        </div>
-        <img className="hero-photo" src={resume.shared.photo} alt={source.profile.name} />
-      </header>
+    <div className="sheet-stack">
+      {pages.map((pageKeys, pageIndex) => (
+        <article className={`sheet ${pageIndex === 0 ? "sheet--first" : "sheet--flow"}`} key={`page-${pageIndex}`}>
+          <div className="sheet__body">
+            {pageIndex === 0 ? (
+              <header className="hero">
+                {resume.shared.photo ? (
+                  <div className="hero__photo-wrap preview-jump-target preview-jump-target--item" role="button" tabIndex={0} onClick={() => onNavigate?.("profile", null, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.("profile", null, language))}>
+                    <img className="hero__photo" src={resume.shared.photo} alt={source.profile.name} />
+                  </div>
+                ) : null}
+                <h1 className="hero__name preview-jump-target preview-jump-target--item" role="button" tabIndex={0} onClick={() => onNavigate?.("profile", null, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.("profile", null, language))}>{source.profile.name}</h1>
+                <div className="hero__contact-row preview-jump-target preview-jump-target--item" role="button" tabIndex={0} onClick={() => onNavigate?.("profile", null, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.("profile", null, language))}>
+                  <ContactItem type="email" label={resume.shared.email} href={`mailto:${resume.shared.email}`} />
+                  <ContactItem type="phone" label={resume.shared.phone} href={resume.shared.phoneHref} />
+                  <ContactItem type="location" label={source.profile.location} isStatic />
+                  <ContactItem type="linkedin" label={source.profile.linkedinLabel} href={resume.shared.linkedinHref} />
+                  <ContactItem type="github" label={source.profile.githubLabel} href={resume.shared.githubHref} />
+                  <ContactItem type="portfolio" label={source.profile.portfolioLabel} href={resume.shared.portfolioHref} />
+                </div>
+              </header>
+            ) : null}
 
-      {resume.shared.sectionOrder.map((key) => (
-        <PreviewSection key={key} title={source.labels[key]}>
-          {key === "summary" && <p className="summary-text">{source.summary}</p>}
-          {key === "experience" && <Timeline items={source.sections.experience} rtl={language === "ar"} />}
-          {key === "internships" && <Timeline items={source.sections.internships} rtl={language === "ar"} />}
-          {key === "projects" && <ProjectsPreview items={source.sections.projects} rtl={language === "ar"} />}
-          {key === "education" && <EducationPreview items={source.sections.education} rtl={language === "ar"} />}
-          {key === "certificates" && <CertificatesPreview items={source.sections.certificates} />}
-          {key === "skills" && <SkillsPreview items={source.sections.skills} />}
-          {key === "softSkills" && <SoftSkillsPreview items={source.sections.softSkills} />}
-        </PreviewSection>
+            {pageKeys.map((key) => (
+              <PreviewSection
+                key={key}
+                title={source.labels[key]}
+                sectionKey={key}
+                sectionIndex={resume.shared.sectionOrder.indexOf(key)}
+                totalSections={resume.shared.sectionOrder.length}
+                onNavigate={onNavigate}
+                onMoveSection={onMoveSection}
+                language={language}
+              >
+                {renderResumeSection({ key, source, rtl: language === "ar", language, onNavigate, onMoveItem })}
+              </PreviewSection>
+            ))}
+          </div>
+        </article>
       ))}
-    </article>
+    </div>
   );
 }
 
-function CoverLetterPreview({ resume, language }) {
+function CoverLetterPreview({ resume, language, onNavigate }) {
   const source = resume.languages[language];
   const letter = source.coverLetter;
   return (
     <article className="sheet cover-letter-sheet">
-      <header className="sheet-hero">
-        <div>
-          <p className="hero-name">{source.profile.name}</p>
-          <div className="hero-contact-row">
-            <ContactItem label={resume.shared.email} href={`mailto:${resume.shared.email}`} dir="ltr" />
-            <ContactItem label={resume.shared.phone} href={resume.shared.phoneHref} dir="ltr" />
-            <ContactItem label={source.profile.location} />
+      <div className="sheet__body">
+        <header className="hero">
+          <h1 className="hero__name preview-jump-target preview-jump-target--item" role="button" tabIndex={0} onClick={() => onNavigate?.("profile", null, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.("profile", null, language))}>{source.profile.name}</h1>
+          <div className="hero__contact-row preview-jump-target preview-jump-target--item" role="button" tabIndex={0} onClick={() => onNavigate?.("profile", null, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.("profile", null, language))}>
+            <ContactItem type="email" label={resume.shared.email} href={`mailto:${resume.shared.email}`} />
+            <ContactItem type="phone" label={resume.shared.phone} href={resume.shared.phoneHref} />
+            <ContactItem type="location" label={source.profile.location} isStatic />
           </div>
-        </div>
-      </header>
-      <div className="cover-letter-body">
+        </header>
+        <div className="cover-letter-body">
         <p>{letter.recipientName || letter.hiringManager || (language === "ar" ? "فريق التوظيف" : "Hiring Team")}</p>
         <p>{letter.company}</p>
         <h2>{letter.targetRole}</h2>
         <p>{letter.opening}</p>
         <p>{letter.body}</p>
         <p>{letter.closing}</p>
-        <p>{letter.signatureName}</p>
+          <p>{letter.signatureName}</p>
+        </div>
       </div>
     </article>
   );
 }
 
-function Timeline({ items, rtl }) {
+function splitResumePreviewPages(sectionOrder) {
+  const order = Array.isArray(sectionOrder) ? sectionOrder.filter(Boolean) : [];
+  if (!order.length) {
+    return [[]];
+  }
+
+  const splitIndex = order.indexOf("education");
+  if (splitIndex > 0) {
+    return [order.slice(0, splitIndex), order.slice(splitIndex)];
+  }
+
+  if (order.length > 4) {
+    return [order.slice(0, 4), order.slice(4)];
+  }
+
+  return [order];
+}
+
+function renderResumeSection({ key, source, rtl, language, onNavigate, onMoveItem }) {
+  switch (key) {
+    case "summary":
+      return <p className="summary-text preview-jump-target preview-jump-target--item" role="button" tabIndex={0} onClick={() => onNavigate?.("summary", null, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.("summary", null, language))}>{source.summary}</p>;
+    case "experience":
+      return <Timeline items={source.sections.experience} rtl={rtl} language={language} sectionKey="experience" onNavigate={onNavigate} onMoveItem={onMoveItem} />;
+    case "internships":
+      return <Timeline items={source.sections.internships} rtl={rtl} language={language} sectionKey="internships" onNavigate={onNavigate} onMoveItem={onMoveItem} />;
+    case "projects":
+      return <ProjectsPreview items={source.sections.projects} rtl={rtl} language={language} sectionKey="projects" onNavigate={onNavigate} onMoveItem={onMoveItem} />;
+    case "education":
+      return <EducationPreview items={source.sections.education} rtl={rtl} language={language} sectionKey="education" onNavigate={onNavigate} onMoveItem={onMoveItem} />;
+    case "certificates":
+      return <CertificatesPreview items={source.sections.certificates} rtl={rtl} language={language} sectionKey="certificates" onNavigate={onNavigate} onMoveItem={onMoveItem} />;
+    case "skills":
+      return <SkillsPreview items={source.sections.skills} language={language} sectionKey="skills" onNavigate={onNavigate} onMoveItem={onMoveItem} />;
+    case "softSkills":
+      return <SoftSkillsPreview items={source.sections.softSkills} language={language} sectionKey="softSkills" onNavigate={onNavigate} onMoveItem={onMoveItem} />;
+    default:
+      return null;
+  }
+}
+
+function Timeline({ items, rtl, language, sectionKey, onNavigate, onMoveItem }) {
   return (
-    <div className="timeline-list">
+    <div className="timeline">
       {items.map((item, index) => (
-        <article className={`timeline-card ${rtl ? "is-rtl" : ""}`} key={`${item.organization}-${index}`}>
-          <div className="timeline-card__meta">
-            <p>{item.date}</p>
-            <p>{item.location}</p>
+        <article className="timeline-item preview-jump-target preview-jump-target--item" role="button" tabIndex={0} key={`${item.organization}-${index}`} onClick={() => onNavigate?.(sectionKey, index, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.(sectionKey, index, language))}>
+          <PreviewMoveButtons onMoveUp={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, -1); }} onMoveDown={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, 1); }} disableUp={index === 0} disableDown={index === items.length - 1} />
+          <div className="timeline-item__meta">
+            <div className="timeline-item__date">{item.date}</div>
+            {item.location ? <div className="timeline-item__location">{item.location}</div> : null}
           </div>
-          <div className="timeline-card__content">
-            <h3>{item.organization}</h3>
-            <p className="timeline-card__role">{item.role}</p>
+          <div className="timeline-item__content">
+            <h3 className="timeline-item__title">{item.organization}</h3>
+            <p className="timeline-item__subtitle">{item.role}</p>
             <ul className="bullet-list">
               {item.bullets.map((bullet, bulletIndex) => <li key={`${index}-${bulletIndex}`}>{bullet}</li>)}
             </ul>
@@ -1612,17 +1858,18 @@ function Timeline({ items, rtl }) {
   );
 }
 
-function ProjectsPreview({ items, rtl }) {
+function ProjectsPreview({ items, rtl, language, sectionKey, onNavigate, onMoveItem }) {
   return (
-    <div className="timeline-list">
+    <div className="timeline">
       {items.map((item, index) => (
-        <article className={`timeline-card ${rtl ? "is-rtl" : ""}`} key={`${item.title}-${index}`}>
-          <div className="timeline-card__meta">
-            <p>{item.date}</p>
-            {item.linkHref ? <a href={item.linkHref} target="_blank" rel="noreferrer">{item.linkLabel || item.linkHref}</a> : null}
+        <article className="timeline-item preview-jump-target preview-jump-target--item" role="button" tabIndex={0} key={`${item.title}-${index}`} onClick={() => onNavigate?.(sectionKey, index, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.(sectionKey, index, language))}>
+          <PreviewMoveButtons onMoveUp={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, -1); }} onMoveDown={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, 1); }} disableUp={index === 0} disableDown={index === items.length - 1} />
+          <div className="timeline-item__meta">
+            <div className="timeline-item__date">{item.date}</div>
           </div>
-          <div className="timeline-card__content">
-            <h3>{item.title}</h3>
+          <div className="timeline-item__content">
+            <h3 className="timeline-item__title">{item.title}</h3>
+            {item.linkHref ? <a className="timeline-item__link" href={item.linkHref} target="_blank" rel="noreferrer">{item.linkLabel || item.linkHref}</a> : null}
             <ul className="bullet-list">
               {item.bullets.map((bullet, bulletIndex) => <li key={`${index}-${bulletIndex}`}>{bullet}</li>)}
             </ul>
@@ -1633,18 +1880,19 @@ function ProjectsPreview({ items, rtl }) {
   );
 }
 
-function EducationPreview({ items, rtl }) {
+function EducationPreview({ items, rtl, language, sectionKey, onNavigate, onMoveItem }) {
   return (
-    <div className="timeline-list">
+    <div className="timeline">
       {items.map((item, index) => (
-        <article className={`timeline-card ${rtl ? "is-rtl" : ""}`} key={`${item.degree}-${index}`}>
-          <div className="timeline-card__meta">
-            <p>{item.date}</p>
-            <p>{item.location}</p>
+        <article className="timeline-item preview-jump-target preview-jump-target--item" role="button" tabIndex={0} key={`${item.degree}-${index}`} onClick={() => onNavigate?.(sectionKey, index, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.(sectionKey, index, language))}>
+          <PreviewMoveButtons onMoveUp={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, -1); }} onMoveDown={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, 1); }} disableUp={index === 0} disableDown={index === items.length - 1} />
+          <div className="timeline-item__meta">
+            <div className="timeline-item__date">{item.date}</div>
+            {item.location ? <div className="timeline-item__location">{item.location}</div> : null}
           </div>
-          <div className="timeline-card__content">
-            <h3>{item.degree}</h3>
-            <p className="timeline-card__role">{item.institution}</p>
+          <div className="timeline-item__content">
+            <h3 className="timeline-item__title">{item.degree}</h3>
+            <p className="timeline-item__subtitle">{item.institution}</p>
           </div>
         </article>
       ))}
@@ -1652,53 +1900,146 @@ function EducationPreview({ items, rtl }) {
   );
 }
 
-function CertificatesPreview({ items }) {
+function CertificatesPreview({ items, rtl, language, sectionKey, onNavigate, onMoveItem }) {
   return (
-    <div className="cert-grid">
+    <div className="certificate-list">
       {items.map((item, index) => (
-        <article className="cert-card" key={`${item.title}-${index}`}>
-          <h3>{item.title}</h3>
-          <p>{item.description}</p>
+        <article className={`certificate-card ${rtl ? "certificate-card--stacked" : ""} preview-jump-target preview-jump-target--item`} role="button" tabIndex={0} key={`${item.title}-${index}`} onClick={() => onNavigate?.(sectionKey, index, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.(sectionKey, index, language))}>
+          <PreviewMoveButtons onMoveUp={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, -1); }} onMoveDown={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, 1); }} disableUp={index === 0} disableDown={index === items.length - 1} />
+          {rtl ? (
+            <>
+              <p className="certificate-card__title" dir="ltr">
+                <strong>{splitCertificateTitle(item.title).title}</strong>
+                {splitCertificateTitle(item.title).date ? <span className="certificate-card__date">{splitCertificateTitle(item.title).date}</span> : null}
+              </p>
+              <p className="certificate-card__description">{item.description}</p>
+            </>
+          ) : (
+            <p className="certificate-card__text">
+              <strong>{item.title}</strong>
+              <span className="certificate-card__dash"> - </span>
+              <span>{item.description}</span>
+            </p>
+          )}
         </article>
       ))}
     </div>
   );
 }
 
-function SkillsPreview({ items }) {
+function SkillsPreview({ items, language, sectionKey, onNavigate, onMoveItem }) {
   return (
-    <div className="skill-groups">
+    <ul className="skill-list technical-skill-list">
       {items.map((item, index) => (
-        <article className="skill-group" key={`${item.label}-${index}`}>
-          <h3>{item.label}</h3>
-          <p>{item.items}</p>
-        </article>
+        <li className="skill-list__item preview-jump-target preview-jump-target--item" role="button" tabIndex={0} key={`${item.label}-${index}`} onClick={() => onNavigate?.(sectionKey, index, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.(sectionKey, index, language))}>
+          <PreviewMoveButtons onMoveUp={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, -1); }} onMoveDown={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, index, 1); }} disableUp={index === 0} disableDown={index === items.length - 1} />
+          <strong>{item.label}:</strong> {item.items}
+        </li>
       ))}
-    </div>
-  );
-}
-
-function SoftSkillsPreview({ items }) {
-  return (
-    <ul className="soft-skill-list">
-      {items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
     </ul>
   );
 }
 
-function PreviewSection({ title, children }) {
+function SoftSkillsPreview({ items, language, sectionKey, onNavigate, onMoveItem }) {
+  const rows = [];
+  for (let index = 0; index < items.length; index += 2) {
+    rows.push([items[index] || "", items[index + 1] || ""]);
+  }
   return (
-    <section className="preview-section">
+    <section className="soft-skills-panel">
+      <table className="soft-skill-table">
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr className="soft-skill-row" key={`soft-row-${rowIndex}`}>
+              {row.map((item, cellIndex) => (
+                <td className="soft-skill-cell" key={`soft-cell-${rowIndex}-${cellIndex}`}>
+                  <ul className="soft-skill-list">
+                    {item ? (
+                      <li className="soft-skill-item preview-jump-target preview-jump-target--item" role="button" tabIndex={0} onClick={() => onNavigate?.(sectionKey, rowIndex * 2 + cellIndex, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.(sectionKey, rowIndex * 2 + cellIndex, language))}>
+                        <PreviewMoveButtons onMoveUp={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, rowIndex * 2 + cellIndex, -1); }} onMoveDown={(event) => { event.stopPropagation(); onMoveItem?.(language, sectionKey, rowIndex * 2 + cellIndex, 1); }} disableUp={rowIndex * 2 + cellIndex === 0} disableDown={rowIndex * 2 + cellIndex === items.length - 1} />
+                        {item}
+                      </li>
+                    ) : null}
+                  </ul>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function PreviewSection({ title, children, sectionKey, sectionIndex, totalSections, onNavigate, onMoveSection, language }) {
+  return (
+    <section className="preview-section preview-jump-target preview-jump-target--section" role="button" tabIndex={0} onClick={() => onNavigate?.(sectionKey, null, language)} onKeyDown={(event) => handlePreviewActivate(event, () => onNavigate?.(sectionKey, null, language))}>
+      <PreviewMoveButtons onMoveUp={(event) => { event.stopPropagation(); onMoveSection?.(sectionKey, -1); }} onMoveDown={(event) => { event.stopPropagation(); onMoveSection?.(sectionKey, 1); }} disableUp={sectionIndex <= 0} disableDown={sectionIndex >= totalSections - 1} />
       <h2 className="section-title">{title}</h2>
       {children}
     </section>
   );
 }
 
-function ContactItem({ label, href, dir }) {
-  const content = href ? <a href={href} target="_blank" rel="noreferrer">{label}</a> : <span>{label}</span>;
-  return <span className="contact-item" dir={dir || "auto"}>{content}</span>;
+function PreviewMoveButtons({ onMoveUp, onMoveDown, disableUp = false, disableDown = false }) {
+  return (
+    <div className="preview-move-buttons">
+      <button type="button" className="preview-move-button" aria-label="Move up" title="Move up" onClick={onMoveUp} disabled={disableUp}>
+        <GlyphIcon name="moveUp" />
+      </button>
+      <button type="button" className="preview-move-button" aria-label="Move down" title="Move down" onClick={onMoveDown} disabled={disableDown}>
+        <GlyphIcon name="moveDown" />
+      </button>
+    </div>
+  );
 }
+
+function handlePreviewActivate(event, action) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    action();
+  }
+}
+
+function splitCertificateTitle(title) {
+  const match = String(title || "").match(/^(.*?)(?:\s*\|\s*(\d{4}))$/);
+  return {
+    title: match ? match[1].trim() : String(title || "").trim(),
+    date: match ? match[2].trim() : ""
+  };
+}
+
+function ContactItem({ type, label, href, isStatic = false }) {
+  if (!String(label || "").trim()) {
+    return null;
+  }
+
+  const icon = CONTACT_ICONS[type];
+  const isLtr = ["email", "phone", "linkedin", "github", "portfolio"].includes(type);
+  const content = isStatic || !href
+    ? <span className={`contact-item__label contact-item__label--${type}`} dir={isLtr ? "ltr" : "auto"}>{label}</span>
+    : (
+        <a className={`contact-item__label contact-item__label--${type}`} href={href} target={["linkedin", "github", "portfolio"].includes(type) ? "_blank" : "_self"} rel="noreferrer" dir={isLtr ? "ltr" : "auto"}>
+          {label}
+        </a>
+      );
+
+  return (
+    <span className={`contact-item contact-item--${type}`}>
+      {icon ? <span className="contact-item__icon" aria-hidden="true">{icon}</span> : null}
+      {content}
+    </span>
+  );
+}
+
+const CONTACT_ICONS = {
+  email: <svg viewBox="0 0 24 24"><path d="M3 6.75A1.75 1.75 0 0 1 4.75 5h14.5C20.22 5 21 5.78 21 6.75v10.5A1.75 1.75 0 0 1 19.25 19H4.75A1.75 1.75 0 0 1 3 17.25V6.75Zm1.9-.25L12 11.72l7.1-5.22H4.9Zm14.6 11V8.38l-7.06 5.2a.75.75 0 0 1-.88 0L4.5 8.38v9.12h15Z" /></svg>,
+  phone: <svg viewBox="0 0 24 24"><path d="M7.12 3.25c.4 0 .77.23.94.6l1.34 2.98a1.5 1.5 0 0 1-.22 1.56L7.94 9.86a14.8 14.8 0 0 0 6.2 6.2l1.47-1.24a1.5 1.5 0 0 1 1.56-.22l2.98 1.34c.37.17.6.54.6.94v2.13c0 .83-.67 1.5-1.5 1.5C9.72 20.5 3.5 14.28 3.5 6.88c0-.83.67-1.5 1.5-1.5h2.12Z" /></svg>,
+  location: <svg viewBox="0 0 24 24"><path d="M12 21c-.24 0-.47-.1-.64-.28C10.5 19.86 5 14.05 5 9.5a7 7 0 1 1 14 0c0 4.55-5.5 10.36-6.36 11.22A.9.9 0 0 1 12 21Zm0-16.5A5.5 5.5 0 0 0 6.5 9.5c0 3.2 3.61 7.63 5.5 9.6 1.89-1.97 5.5-6.4 5.5-9.6A5.5 5.5 0 0 0 12 4.5Zm0 7.25a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5Z" /></svg>,
+  github: <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.88-2.78.62-3.37-1.2-3.37-1.2-.45-1.2-1.11-1.52-1.11-1.52-.9-.64.07-.63.07-.63 1 .08 1.53 1.05 1.53 1.05.88 1.56 2.3 1.11 2.86.85.09-.66.34-1.11.62-1.36-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.74 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84a9.3 9.3 0 0 1 2.5.35c1.9-1.33 2.74-1.05 2.74-1.05.56 1.43.21 2.48.11 2.74.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.8-4.57 5.06.36.32.68.95.68 1.92 0 1.39-.01 2.5-.01 2.84 0 .27.18.6.69.49A10.2 10.2 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" /></svg>,
+  linkedin: <svg viewBox="0 0 24 24"><path d="M6.45 8.5a1.8 1.8 0 1 1 0-3.6 1.8 1.8 0 0 1 0 3.6ZM4.9 19V9.8H8V19H4.9Zm5.08 0V9.8h2.97v1.25h.04c.41-.78 1.42-1.6 2.92-1.6 3.12 0 3.7 2.05 3.7 4.71V19h-3.1v-4.3c0-1.02-.02-2.34-1.42-2.34-1.42 0-1.64 1.1-1.64 2.27V19H9.98Z" /></svg>,
+  portfolio: <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm6.92 8h-3.01a14.3 14.3 0 0 0-1.25-4.27A7.53 7.53 0 0 1 18.92 11Zm-6.17-5.38c.78.92 1.58 2.8 1.88 5.38h-5.26c.3-2.58 1.1-4.46 1.88-5.38.24-.28.48-.45.75-.45s.51.17.75.45ZM9.34 6.73A14.3 14.3 0 0 0 8.09 11H5.08a7.53 7.53 0 0 1 4.26-4.27ZM4.58 13h3.31c.08 1.56.42 3.02.94 4.27A7.53 7.53 0 0 1 4.58 13Zm4.79 0h5.26c-.3 2.58-1.1 4.46-1.88 5.38-.24.28-.48.45-.75.45s-.51-.17-.75-.45c-.78-.92-1.58-2.8-1.88-5.38Zm6.8 4.27c.52-1.25.86-2.71.94-4.27h3.31a7.53 7.53 0 0 1-4.25 4.27Z" /></svg>
+};
 
 function PresetSummary({ preset, t }) {
   const tokens = preset === "refined" ? REFINED_STYLE_TOKENS : DEFAULT_STYLE_TOKENS;
@@ -1744,9 +2085,9 @@ function ScoreRow({ title, scores }) {
   );
 }
 
-function SectionCard({ title, description, children }) {
+function SectionCard({ title, description, children, sectionKey = "", itemIndex = null }) {
   return (
-    <section className="panel-card">
+    <section className="panel-card" data-editor-section={sectionKey || undefined} data-editor-index={itemIndex == null ? undefined : itemIndex}>
       <div className="panel-card__header">
         <div>
           <h2>{title}</h2>
@@ -1787,8 +2128,8 @@ function TextAreaField({ label, value, onChange, rows = 4 }) {
   );
 }
 
-function InlineRow({ children }) {
-  return <div className="inline-row">{children}</div>;
+function InlineRow({ children, sectionKey = "", itemIndex = null }) {
+  return <div className="inline-row" data-editor-section={sectionKey || undefined} data-editor-index={itemIndex == null ? undefined : itemIndex}>{children}</div>;
 }
 
 function StatusNotice({ children }) {
@@ -1797,14 +2138,14 @@ function StatusNotice({ children }) {
 
 function BulletTextList({ items = [] }) {
   if (!items.length) {
-    return <p>—</p>;
+    return <p>-</p>;
   }
   return <ul className="plain-list">{items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>;
 }
 
 function BulletReviewItems({ items = [] }) {
   if (!items.length) {
-    return <p>—</p>;
+    return <p>-</p>;
   }
   return (
     <div className="stack">
@@ -1822,7 +2163,7 @@ function PreviewJson({ title, data }) {
   return (
     <div className="review-card">
       <strong>{title}</strong>
-      <pre className="compare-block">{data ? JSON.stringify(data, null, 2) : "—"}</pre>
+      <pre className="compare-block">{data ? JSON.stringify(data, null, 2) : "-"}</pre>
     </div>
   );
 }

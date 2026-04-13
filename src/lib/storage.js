@@ -26,6 +26,8 @@ export function loadAppState() {
     collapseSidebar: false,
     centerPreview: false,
     previewZoom: 110,
+    rightPanelCollapsed: false,
+    rightPanelWidth: 430,
     ...safeParse(UI_STORAGE_KEY)
   };
 
