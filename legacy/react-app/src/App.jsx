@@ -285,6 +285,32 @@ export default function App({ routeConfig }) {
     });
   }
 
+  function handleProfilePhotoUpload(file) {
+    if (!file) {
+      return;
+    }
+    if (!String(file.type || "").startsWith("image/")) {
+      setUiMessage("Choose a valid image file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setUiMessage("Photo upload failed.");
+        return;
+      }
+      updateSharedField("photo", reader.result);
+      setUiMessage("Profile photo updated.");
+    };
+    reader.onerror = () => setUiMessage("Photo upload failed.");
+    reader.readAsDataURL(file);
+  }
+
+  function clearProfilePhoto() {
+    updateSharedField("photo", "");
+    setUiMessage("Profile photo removed.");
+  }
+
   function updateTargetingField(key, value) {
     patchResume((draft) => {
       draft.shared.targeting[key] = value;
@@ -897,6 +923,8 @@ export default function App({ routeConfig }) {
                 updateBullet={updateBullet}
                 addSectionItem={addSectionItem}
                 removeSectionItem={removeSectionItem}
+                onUploadPhoto={handleProfilePhotoUpload}
+                onClearPhoto={clearProfilePhoto}
               />
             )}
             {activeArea === "resumes" && workspaceArea === "layout" && (
@@ -981,7 +1009,7 @@ export default function App({ routeConfig }) {
                 importVersions={handleImportClick}
               />
             )}
-            {activeArea === "profile" && <ProfileArea t={t} resume={resume} contentLanguage={contentLanguage} updateSharedField={updateSharedField} updateLanguageField={updateLanguageField} />}
+            {activeArea === "profile" && <ProfileArea t={t} resume={resume} contentLanguage={contentLanguage} updateSharedField={updateSharedField} updateLanguageField={updateLanguageField} onUploadPhoto={handleProfilePhotoUpload} onClearPhoto={clearProfilePhoto} />}
             {activeArea === "preferences" && <PreferencesArea t={t} uiLanguage={uiLanguage} setUiLanguage={setUiLanguage} previewLanguage={previewLanguage} setPreviewLanguage={setPreviewLanguage} contentLanguage={contentLanguage} setContentLanguage={setContentLanguage} resume={resume} setStylePreset={(value) => updateSharedField("stylePreset", value)} />}
             {activeArea === "authentication" && <FutureArea t={t} title={t.topAreas.authentication} body="Authentication management will be added in a later release." />}
             {activeArea === "apiKeys" && <AiSettingsCardOnly t={t} title={t.topAreas.apiKeys} aiSettings={aiSettings} setAiSettings={setAiSettings} saveAiSettings={saveAiSettings} />}
@@ -1084,10 +1112,11 @@ function DashboardCard({ title, body, icon, onClick, badge }) {
   );
 }
 
-function ProfileArea({ t, resume, contentLanguage, updateSharedField, updateLanguageField }) {
+function ProfileArea({ t, resume, contentLanguage, updateSharedField, updateLanguageField, onUploadPhoto, onClearPhoto }) {
   const source = resume.languages[contentLanguage];
   return (
     <SectionCard title={t.topAreas.profile} description={t.sharedFields} sectionKey="profile">
+      <PhotoUploadField photo={resume.shared.photo} onUploadPhoto={onUploadPhoto} onClearPhoto={onClearPhoto} />
       <div className="grid-two">
         <InputField label={t.fieldLabels.fullName} value={source.profile.name} onChange={(value) => updateLanguageField(contentLanguage, ["profile", "name"], value)} />
         <InputField label={t.fieldLabels.location} value={source.profile.location} onChange={(value) => updateLanguageField(contentLanguage, ["profile", "location"], value)} />
@@ -1223,7 +1252,9 @@ function ContentArea(props) {
     updateListItem,
     updateBullet,
     addSectionItem,
-    removeSectionItem
+    removeSectionItem,
+    onUploadPhoto,
+    onClearPhoto
   } = props;
   const source = resume.languages[contentLanguage];
   const sectionTabs = ["summary", "experience", "internships", "projects", "education", "certificates", "skills", "softSkills"];
@@ -1231,6 +1262,7 @@ function ContentArea(props) {
   return (
     <div className="stack">
       <SectionCard title={t.sharedFields} description={t.profile}>
+        <PhotoUploadField photo={resume.shared.photo} onUploadPhoto={onUploadPhoto} onClearPhoto={onClearPhoto} />
         <div className="grid-two">
           <InputField label={t.fieldLabels.email} value={resume.shared.email} onChange={(value) => updateSharedField("email", value)} />
           <InputField label={t.fieldLabels.phone} value={resume.shared.phone} onChange={(value) => updateSharedField("phone", value)} />
@@ -2116,6 +2148,37 @@ function InputField({ label, value, onChange, type = "text" }) {
       <span className="field-label">{label}</span>
       <input type={type} value={value || ""} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+function PhotoUploadField({ photo, onUploadPhoto, onClearPhoto }) {
+  return (
+    <div className="photo-field">
+      <div className="photo-field__preview">
+        {photo ? <img src={photo} alt="Profile preview" /> : <span>No photo</span>}
+      </div>
+      <div className="photo-field__controls">
+        <label className="topbar__button topbar__button--secondary photo-field__upload">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                onUploadPhoto?.(file);
+              }
+              event.target.value = "";
+            }}
+          />
+          Upload photo
+        </label>
+        {photo ? (
+          <button type="button" className="topbar__button topbar__button--secondary" onClick={onClearPhoto}>
+            Remove photo
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

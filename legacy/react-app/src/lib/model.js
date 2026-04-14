@@ -29,7 +29,7 @@ export function normalizeResume(input) {
   return {
     id: String(resume.id || `resume-${Date.now()}`),
     shared: {
-      photo: String(shared.photo || demo.shared.photo),
+      photo: shared.photo == null ? String(demo.shared.photo) : String(shared.photo),
       email: String(shared.email || ""),
       phone: String(shared.phone || ""),
       phoneHref: String(shared.phoneHref || ""),

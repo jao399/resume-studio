@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $runtimeDir = Join-Path $workspaceRoot ".local-trash\runtime"
-$serverPort = 4173
+$runtimeSpecPath = Join-Path $runtimeDir "analysis-ui.spec.js"
+$serverPort = 4176
 $serverUrl = "http://127.0.0.1:$serverPort/index.html"
 $helperUrl = "http://127.0.0.1:8767/health"
 $reportPath = Join-Path $runtimeDir "analysis-ui-last-run.json"
@@ -50,6 +51,8 @@ try {
   Push-Location $runtimeDir
   try {
     $startedAt = Get-Date
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "analysis-ui.spec.js") -Destination $runtimeSpecPath -Force
+    $env:RESUME_VERIFY_URL = $serverUrl
     & npx playwright test analysis-ui.spec.js -c .
     $exitCode = $LASTEXITCODE
     $report = [ordered]@{

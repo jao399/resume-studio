@@ -25,9 +25,9 @@ export function loadAppState() {
     theme: "system",
     collapseSidebar: false,
     centerPreview: false,
-    previewZoom: 110,
+    previewZoom: 100,
     rightPanelCollapsed: false,
-    rightPanelWidth: 430,
+    rightPanelWidth: 380,
     ...safeParse(UI_STORAGE_KEY)
   };
 
