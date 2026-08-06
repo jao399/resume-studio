@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $runtimeDir = Join-Path $workspaceRoot ".local-trash\runtime"
 $runtimeSpecPath = Join-Path $runtimeDir "analysis-ui.spec.js"
+$runtimeArabicLayoutSpecPath = Join-Path $runtimeDir "arabic-layout.spec.js"
 $serverPort = 4176
 $serverUrl = "http://127.0.0.1:$serverPort/index.html"
 $helperUrl = "http://127.0.0.1:8767/health"
@@ -30,12 +31,12 @@ if (-not (Test-Path (Join-Path $runtimeDir "node_modules\@playwright\test"))) {
 }
 
 if (-not (Test-ServerReady -Url $serverUrl)) {
-  $startedServer = Start-Process -FilePath "python" -ArgumentList "-m", "http.server", "$serverPort" -WorkingDirectory $workspaceRoot -PassThru
+  $startedServer = Start-Process -FilePath "python" -ArgumentList "-m", "http.server", "$serverPort" -WorkingDirectory $workspaceRoot -WindowStyle Hidden -PassThru
   Start-Sleep -Seconds 2
 }
 
 if (-not (Test-ServerReady -Url $helperUrl)) {
-  $startedHelper = Start-Process -FilePath "python" -ArgumentList "tools/pdf-helper.py" -WorkingDirectory $workspaceRoot -PassThru
+  $startedHelper = Start-Process -FilePath "python" -ArgumentList "tools/pdf-helper.py" -WorkingDirectory $workspaceRoot -WindowStyle Hidden -PassThru
   Start-Sleep -Seconds 2
 }
 
@@ -52,8 +53,9 @@ try {
   try {
     $startedAt = Get-Date
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "analysis-ui.spec.js") -Destination $runtimeSpecPath -Force
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "arabic-layout.spec.js") -Destination $runtimeArabicLayoutSpecPath -Force
     $env:RESUME_VERIFY_URL = $serverUrl
-    & npx playwright test analysis-ui.spec.js -c .
+    & npx playwright test analysis-ui.spec.js arabic-layout.spec.js -c .
     $exitCode = $LASTEXITCODE
     $report = [ordered]@{
       verifiedAt = (Get-Date).ToString("o")
@@ -61,7 +63,7 @@ try {
       workspace = $workspaceRoot
       appUrl = $serverUrl
       helperUrl = $helperUrl
-      command = "npx playwright test analysis-ui.spec.js -c ."
+      command = "npx playwright test analysis-ui.spec.js arabic-layout.spec.js -c ."
       status = $(if ($exitCode -eq 0) { "passed" } else { "failed" })
       exitCode = $exitCode
     }

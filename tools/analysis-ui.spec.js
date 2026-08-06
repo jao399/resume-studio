@@ -145,3 +145,97 @@ Soft skills:
   expect(runtime.consoleErrors).toEqual([]);
   expect(runtime.requestFailures).toEqual([]);
 });
+
+test("profile photo upload, crop, persistence, and removal work", async ({ page }) => {
+  await page.goto(`${BASE_URL}#profile`, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle");
+
+  const uploadInput = page.getByTestId("photo-upload-input");
+  const chooseButton = page.getByTestId("photo-choose-button");
+  await expect(chooseButton).toBeVisible();
+  await expect(page.getByText("Image URL or path (optional)")).toBeVisible();
+
+  await uploadInput.setInputFiles({
+    name: "oversized.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.alloc(10 * 1024 * 1024 + 1)
+  });
+  await expect(page.getByRole("alert")).toContainText("10 MB or smaller");
+
+  await uploadInput.setInputFiles({
+    name: "invalid.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("not an image")
+  });
+  await expect(page.getByRole("alert")).toContainText("JPEG, PNG, or WebP");
+
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mNkYPj/n4GBgYGJAQoAHgQCAe2EDksAAAAASUVORK5CYII=",
+    "base64"
+  );
+  await uploadInput.setInputFiles({
+    name: "profile.png",
+    mimeType: "image/png",
+    buffer: png
+  });
+
+  const cropDialog = page.getByTestId("photo-crop-dialog");
+  await expect(cropDialog).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Crop profile photo" })).toBeVisible();
+  await page.getByTestId("photo-zoom-input").fill("1.5");
+  const cropStage = page.getByTestId("photo-crop-stage");
+  const cropBox = await cropStage.boundingBox();
+  expect(cropBox).not.toBeNull();
+  await page.mouse.move(cropBox.x + cropBox.width / 2, cropBox.y + cropBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cropBox.x + cropBox.width / 2 + 30, cropBox.y + cropBox.height / 2 + 20);
+  await page.mouse.up();
+  await page.getByTestId("photo-rotate-right").click();
+  await page.getByTestId("photo-reset").click();
+  await page.getByTestId("photo-save").click();
+  await expect(cropDialog).toHaveCount(0);
+
+  const previewPhoto = page.locator("#resume .hero__photo");
+  await expect(previewPhoto).toHaveCount(1);
+  const uploadedSource = await previewPhoto.getAttribute("src");
+  expect(uploadedSource).toMatch(/^data:image\/jpeg;base64,/);
+  const uploadedDimensions = await previewPhoto.evaluate((image) => ({
+    width: image.naturalWidth,
+    height: image.naturalHeight
+  }));
+  expect(uploadedDimensions).toEqual({ width: 512, height: 512 });
+
+  const editButton = page.getByTestId("photo-edit-button");
+  await editButton.click();
+  await expect(cropDialog).toBeVisible();
+  await page.getByTestId("photo-zoom-input").fill("2");
+  await page.getByTestId("photo-cancel").click();
+  await expect(cropDialog).toHaveCount(0);
+  await expect(editButton).toBeFocused();
+  await expect(previewPhoto).toHaveAttribute("src", uploadedSource);
+
+  await editButton.click();
+  await expect(cropDialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(cropDialog).toHaveCount(0);
+  await expect(previewPhoto).toHaveAttribute("src", uploadedSource);
+
+  await page.waitForTimeout(400);
+  const storedPhoto = await page.evaluate(() => {
+    const draft = JSON.parse(localStorage.getItem("resume-editor-draft:en") || "null");
+    return draft?.data?.profile?.photo || "";
+  });
+  expect(storedPhoto).toBe(uploadedSource);
+
+  await page.getByTestId("photo-remove-button").click();
+  await expect(previewPhoto).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(previewPhoto).toHaveCount(1);
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect(previewPhoto).toHaveCount(0);
+
+  await page.goto(BASE_URL.replace("index.html", "arabic.html") + "#profile", { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByTestId("photo-choose-button")).toHaveText("اختر صورة");
+  await expect(page.getByText("رابط أو مسار الصورة (اختياري)")).toBeVisible();
+});

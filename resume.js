@@ -14,6 +14,10 @@
   const previewZoomStep = 5;
   const minPreviewZoom = 70;
   const maxPreviewZoom = 150;
+  const photoMaxFileBytes = 10 * 1024 * 1024;
+  const photoOutputSize = 512;
+  const photoOutputQuality = 0.88;
+  const acceptedPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
   const stylePresetChoices = ["default", "refined"];
   const linkedLanguages = ["en", "ar"];
   const trackedTranslationSections = [
@@ -516,9 +520,9 @@
 
   function bindToolbar() {
     if (printButton) {
-      printButton.addEventListener("click", () => {
-        handleBeforePrint();
-        window.setTimeout(() => window.print(), 60);
+      printButton.addEventListener("click", async () => {
+        await preparePrintLayout();
+        window.print();
       });
     }
 
@@ -2058,12 +2062,28 @@
     return node;
   }
 
-  function handleBeforePrint() {
+  function enterPrintMode() {
     document.body.classList.add("is-printing");
     if (root) {
       root.style.setProperty("--preview-zoom", "100%");
     }
+  }
+
+  function handleBeforePrint() {
+    enterPrintMode();
     renderPreview();
+  }
+
+  async function preparePrintLayout() {
+    enterPrintMode();
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+    renderPreview();
+    await new Promise((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+    });
+    return true;
   }
 
   function handleAfterPrint() {
@@ -2072,10 +2092,7 @@
     renderTimer = window.setTimeout(renderPreview, 40);
   }
 
-  window.__resumePrepareForPrint = () => {
-    handleBeforePrint();
-    return true;
-  };
+  window.__resumePrepareForPrint = preparePrintLayout;
 
   window.__resumeRestoreAfterPrint = () => {
     handleAfterPrint();
@@ -3740,17 +3757,14 @@
   function renderProfileEditor() {
     const wrapper = createEditorSection(state.data.labels.profile || locale.profileSectionTitle, locale.profileSectionDescription, {
       sectionKey: "profile",
-      focusSelector: "input, textarea, select"
+      focusSelector: "input, button, textarea, select"
     });
     wrapper.append(
       createInputField(locale.fields.name, state.data.profile.name, (value) => {
         state.data.profile.name = value;
         schedulePreviewRender();
       }, { fieldKey: "name" }),
-      createInputField(locale.fields.photo, state.data.profile.photo || "", (value) => {
-        state.data.profile.photo = value;
-        schedulePreviewRender();
-      }, { fieldKey: "photo" }),
+      createPhotoEditor(),
       createInputField(locale.fields.email, state.data.profile.email, (value) => {
         state.data.profile.email = value;
         schedulePreviewRender();
@@ -5094,6 +5108,442 @@
     handle.setAttribute("aria-hidden", "true");
     attachHelp(handle, { label: locale.dragLabel, fallbackType: "button" });
     return handle;
+  }
+
+  function createPhotoEditor() {
+    const currentPhoto = String(state.data.profile.photo || "").trim();
+    const wrapper = document.createElement("section");
+    wrapper.className = "editor-photo-field";
+    wrapper.dataset.fieldKey = "photo";
+
+    const heading = document.createElement("span");
+    heading.className = "editor-field__label";
+    heading.textContent = locale.photoFieldLabel;
+
+    const content = document.createElement("div");
+    content.className = "editor-photo-field__content";
+
+    const preview = document.createElement("div");
+    preview.className = "editor-photo-field__preview";
+    if (currentPhoto) {
+      const image = document.createElement("img");
+      image.src = currentPhoto;
+      image.alt = locale.photoPreviewAlt;
+      preview.appendChild(image);
+    } else {
+      const empty = document.createElement("span");
+      empty.textContent = locale.photoEmpty;
+      preview.appendChild(empty);
+    }
+
+    const controls = document.createElement("div");
+    controls.className = "editor-photo-field__controls";
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
+    fileInput.hidden = true;
+    fileInput.dataset.testid = "photo-upload-input";
+
+    const error = document.createElement("p");
+    error.className = "editor-photo-field__error";
+    error.setAttribute("role", "alert");
+    error.hidden = true;
+
+    const setError = (message = "") => {
+      error.textContent = message;
+      error.hidden = !message;
+    };
+
+    const chooseButton = createPhotoActionButton(locale.photoChoose, "is-primary", () => {
+      setError();
+      fileInput.click();
+    });
+    chooseButton.dataset.testid = "photo-choose-button";
+
+    controls.appendChild(chooseButton);
+
+    if (currentPhoto) {
+      const editButton = createPhotoActionButton(locale.photoEditCrop, "", () => {
+        setError();
+        openPhotoCropDialog(currentPhoto, {
+          trigger: editButton,
+          onError: setError
+        });
+      });
+      editButton.dataset.testid = "photo-edit-button";
+
+      const removeButton = createPhotoActionButton(locale.photoRemove, "is-danger", () => {
+        commitPendingHistory();
+        const historyBefore = createHistorySnapshot();
+        state.data.profile.photo = "";
+        commitHistorySnapshot(historyBefore);
+        refreshAll();
+      });
+      removeButton.dataset.testid = "photo-remove-button";
+      controls.append(editButton, removeButton);
+    }
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      fileInput.value = "";
+      if (!file) {
+        return;
+      }
+      if (!acceptedPhotoTypes.has(String(file.type || "").toLowerCase())) {
+        setError(locale.photoInvalidType);
+        return;
+      }
+      if (!file.size || file.size > photoMaxFileBytes) {
+        setError(locale.photoTooLarge);
+        return;
+      }
+
+      setError();
+      const objectUrl = URL.createObjectURL(file);
+      await openPhotoCropDialog(objectUrl, {
+        trigger: chooseButton,
+        revokeSource: true,
+        onError: setError
+      });
+    });
+
+    content.append(preview, controls, fileInput);
+    wrapper.append(heading, content, error);
+
+    const isUploadedPhoto = /^data:image\//i.test(currentPhoto);
+    const pathField = createInputField(locale.photoPathLabel, isUploadedPhoto ? "" : currentPhoto, (value) => {
+      state.data.profile.photo = value;
+      schedulePreviewRender();
+    }, {
+      fieldKey: "photo",
+      placeholder: isUploadedPhoto ? locale.photoUploadedPlaceholder : locale.photoPathPlaceholder
+    });
+    pathField.classList.add("editor-photo-field__path");
+    wrapper.appendChild(pathField);
+
+    attachHelp(wrapper, {
+      text: locale.helpPhotoField,
+      label: locale.photoFieldLabel,
+      fallbackType: "field"
+    });
+    return wrapper;
+  }
+
+  function createPhotoActionButton(labelText, extraClass, onActivate) {
+    return createActionButton(labelText, extraClass, onActivate, false, {
+      helpText: locale.helpProfileSection,
+      label: locale.profileSectionTitle
+    });
+  }
+
+  async function openPhotoCropDialog(source, options = {}) {
+    let cropImage;
+    try {
+      cropImage = await loadPhotoCropImage(source);
+    } catch (error) {
+      if (options.revokeSource) {
+        URL.revokeObjectURL(source);
+      }
+      options.onError?.(isExternalPhotoSource(source) ? locale.photoCorsError : locale.photoLoadError);
+      return false;
+    }
+
+    const dialog = document.createElement("dialog");
+    dialog.className = "photo-crop-dialog";
+    dialog.dataset.testid = "photo-crop-dialog";
+    dialog.dir = document.documentElement.dir || "ltr";
+
+    const panel = document.createElement("div");
+    panel.className = "photo-crop-dialog__panel";
+
+    const titleId = `photo-crop-title-${Date.now()}`;
+    const title = document.createElement("h2");
+    title.id = titleId;
+    title.className = "photo-crop-dialog__title";
+    title.textContent = locale.photoCropTitle;
+    dialog.setAttribute("aria-labelledby", titleId);
+
+    const description = document.createElement("p");
+    description.className = "photo-crop-dialog__description";
+    description.textContent = locale.photoCropDescription;
+
+    const stage = document.createElement("div");
+    stage.className = "photo-crop-dialog__stage";
+    stage.tabIndex = 0;
+    stage.setAttribute("role", "application");
+    stage.setAttribute("aria-label", locale.photoCropStageLabel);
+    stage.dataset.testid = "photo-crop-stage";
+
+    const canvas = document.createElement("canvas");
+    canvas.width = photoOutputSize;
+    canvas.height = photoOutputSize;
+    canvas.className = "photo-crop-dialog__canvas";
+
+    const mask = document.createElement("div");
+    mask.className = "photo-crop-dialog__mask";
+    mask.setAttribute("aria-hidden", "true");
+    stage.append(canvas, mask);
+
+    const cropState = {
+      rotation: 0,
+      zoom: 1,
+      offsetX: 0,
+      offsetY: 0
+    };
+
+    const getRotatedSize = () => {
+      const quarterTurn = Math.abs(cropState.rotation % 180) === 90;
+      return {
+        width: quarterTurn ? cropImage.naturalHeight : cropImage.naturalWidth,
+        height: quarterTurn ? cropImage.naturalWidth : cropImage.naturalHeight
+      };
+    };
+
+    const getScale = () => {
+      const rotated = getRotatedSize();
+      return Math.max(photoOutputSize / rotated.width, photoOutputSize / rotated.height) * cropState.zoom;
+    };
+
+    const clampOffsets = () => {
+      const rotated = getRotatedSize();
+      const scale = getScale();
+      const maxX = Math.max(0, (rotated.width * scale - photoOutputSize) / 2);
+      const maxY = Math.max(0, (rotated.height * scale - photoOutputSize) / 2);
+      cropState.offsetX = Math.max(-maxX, Math.min(maxX, cropState.offsetX));
+      cropState.offsetY = Math.max(-maxY, Math.min(maxY, cropState.offsetY));
+    };
+
+    const drawCrop = (targetCanvas = canvas) => {
+      const context = targetCanvas.getContext("2d");
+      if (!context) {
+        return false;
+      }
+      clampOffsets();
+      context.save();
+      context.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+      const outputRatio = targetCanvas.width / photoOutputSize;
+      context.translate(
+        targetCanvas.width / 2 + cropState.offsetX * outputRatio,
+        targetCanvas.height / 2 + cropState.offsetY * outputRatio
+      );
+      context.rotate(cropState.rotation * Math.PI / 180);
+      const scale = getScale() * outputRatio;
+      context.scale(scale, scale);
+      context.drawImage(
+        cropImage,
+        -cropImage.naturalWidth / 2,
+        -cropImage.naturalHeight / 2,
+        cropImage.naturalWidth,
+        cropImage.naturalHeight
+      );
+      context.restore();
+      return true;
+    };
+
+    const controls = document.createElement("div");
+    controls.className = "photo-crop-dialog__controls";
+
+    const zoomField = document.createElement("label");
+    zoomField.className = "photo-crop-dialog__zoom";
+    const zoomLabel = document.createElement("span");
+    zoomLabel.textContent = locale.photoZoom;
+    const zoomInput = document.createElement("input");
+    zoomInput.type = "range";
+    zoomInput.min = "1";
+    zoomInput.max = "3";
+    zoomInput.step = "0.01";
+    zoomInput.value = "1";
+    zoomInput.dataset.testid = "photo-zoom-input";
+    zoomInput.addEventListener("input", () => {
+      cropState.zoom = Number(zoomInput.value) || 1;
+      drawCrop();
+    });
+    zoomField.append(zoomLabel, zoomInput);
+
+    const transformActions = document.createElement("div");
+    transformActions.className = "editor-actions photo-crop-dialog__transform-actions";
+
+    const rotateLeft = createActionButton(locale.photoRotateLeft, "", () => {
+      cropState.rotation = (cropState.rotation - 90) % 360;
+      cropState.offsetX = 0;
+      cropState.offsetY = 0;
+      drawCrop();
+    });
+    rotateLeft.dataset.testid = "photo-rotate-left";
+
+    const rotateRight = createActionButton(locale.photoRotateRight, "", () => {
+      cropState.rotation = (cropState.rotation + 90) % 360;
+      cropState.offsetX = 0;
+      cropState.offsetY = 0;
+      drawCrop();
+    });
+    rotateRight.dataset.testid = "photo-rotate-right";
+
+    const reset = createActionButton(locale.photoReset, "", () => {
+      cropState.rotation = 0;
+      cropState.zoom = 1;
+      cropState.offsetX = 0;
+      cropState.offsetY = 0;
+      zoomInput.value = "1";
+      drawCrop();
+    });
+    reset.dataset.testid = "photo-reset";
+    transformActions.append(rotateLeft, rotateRight, reset);
+    controls.append(zoomField, transformActions);
+
+    let drag = null;
+    stage.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 && event.pointerType !== "touch") {
+        return;
+      }
+      const rect = stage.getBoundingClientRect();
+      drag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        offsetX: cropState.offsetX,
+        offsetY: cropState.offsetY,
+        ratio: photoOutputSize / Math.max(1, rect.width)
+      };
+      stage.setPointerCapture(event.pointerId);
+      stage.classList.add("is-dragging");
+      event.preventDefault();
+    });
+
+    stage.addEventListener("pointermove", (event) => {
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return;
+      }
+      cropState.offsetX = drag.offsetX + (event.clientX - drag.startX) * drag.ratio;
+      cropState.offsetY = drag.offsetY + (event.clientY - drag.startY) * drag.ratio;
+      drawCrop();
+    });
+
+    const finishDrag = (event) => {
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return;
+      }
+      if (stage.hasPointerCapture(event.pointerId)) {
+        stage.releasePointerCapture(event.pointerId);
+      }
+      drag = null;
+      stage.classList.remove("is-dragging");
+    };
+    stage.addEventListener("pointerup", finishDrag);
+    stage.addEventListener("pointercancel", finishDrag);
+
+    stage.addEventListener("keydown", (event) => {
+      const step = event.shiftKey ? 20 : 5;
+      if (event.key === "ArrowLeft") {
+        cropState.offsetX -= step;
+      } else if (event.key === "ArrowRight") {
+        cropState.offsetX += step;
+      } else if (event.key === "ArrowUp") {
+        cropState.offsetY -= step;
+      } else if (event.key === "ArrowDown") {
+        cropState.offsetY += step;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      drawCrop();
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "photo-crop-dialog__footer";
+    const cancel = createActionButton(locale.photoCancel, "", () => dialog.close("cancel"));
+    cancel.dataset.testid = "photo-cancel";
+    const save = createActionButton(locale.photoSave, "is-primary", () => {
+      const output = document.createElement("canvas");
+      output.width = photoOutputSize;
+      output.height = photoOutputSize;
+      if (!drawCrop(output)) {
+        options.onError?.(locale.photoSaveError);
+        return;
+      }
+
+      let dataUrl = "";
+      try {
+        dataUrl = output.toDataURL("image/jpeg", photoOutputQuality);
+      } catch (error) {
+        options.onError?.(locale.photoCorsError);
+        dialog.close("error");
+        return;
+      }
+
+      commitPendingHistory();
+      const historyBefore = createHistorySnapshot();
+      state.data.profile.photo = dataUrl;
+      commitHistorySnapshot(historyBefore);
+      dialog.close("save");
+      refreshAll();
+    });
+    save.dataset.testid = "photo-save";
+    footer.append(cancel, save);
+
+    panel.append(title, description, stage, controls, footer);
+    dialog.appendChild(panel);
+    document.body.appendChild(dialog);
+
+    const triggerTestId = options.trigger?.dataset.testid || "";
+    const cleanup = () => {
+      if (options.revokeSource) {
+        URL.revokeObjectURL(source);
+      }
+      dialog.remove();
+      const focusTarget = options.trigger?.isConnected
+        ? options.trigger
+        : triggerTestId
+          ? document.querySelector(`[data-testid="${triggerTestId}"]`)
+          : null;
+      if (focusTarget instanceof HTMLElement) {
+        focusTarget.focus();
+      }
+    };
+    dialog.addEventListener("close", cleanup, { once: true });
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      dialog.close("cancel");
+    });
+
+    drawCrop();
+    if (typeof dialog.showModal === "function") {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute("open", "");
+    }
+    stage.focus();
+    return true;
+  }
+
+  function isExternalPhotoSource(source) {
+    try {
+      const resolved = new URL(source, window.location.href);
+      return ["http:", "https:"].includes(resolved.protocol) && resolved.origin !== window.location.origin;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function loadPhotoCropImage(source) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      if (isExternalPhotoSource(source)) {
+        image.crossOrigin = "anonymous";
+      }
+      image.onload = () => {
+        if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+          resolve(image);
+        } else {
+          reject(new Error("Invalid photo dimensions"));
+        }
+      };
+      image.onerror = () => reject(new Error("Photo could not be loaded"));
+      image.src = source;
+    });
   }
 
   function createInputField(labelText, value, onInput, options = {}) {
@@ -11314,7 +11764,14 @@
   }
 
   function overflows(container) {
-    return container.scrollHeight - container.clientHeight > 1;
+    if (container.scrollHeight - container.clientHeight > 1) {
+      return true;
+    }
+
+    const containerBottom = container.getBoundingClientRect().bottom;
+    return Array.from(container.children).some((child) => (
+      child.getBoundingClientRect().bottom - containerBottom > 1
+    ));
   }
 
   function contactLink(type, href, label, isStatic = false) {
@@ -11827,6 +12284,30 @@
     const isArabic = lang === "ar";
     return {
       ...baseLocale,
+      photoFieldLabel: baseLocale.photoFieldLabel || (isArabic ? "\u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629" : "Profile photo"),
+      photoPreviewAlt: baseLocale.photoPreviewAlt || (isArabic ? "\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629" : "Profile photo preview"),
+      photoEmpty: baseLocale.photoEmpty || (isArabic ? "\u0644\u0627 \u062a\u0648\u062c\u062f \u0635\u0648\u0631\u0629" : "No photo"),
+      photoChoose: baseLocale.photoChoose || (isArabic ? "\u0627\u062e\u062a\u0631 \u0635\u0648\u0631\u0629" : "Choose photo"),
+      photoEditCrop: baseLocale.photoEditCrop || (isArabic ? "\u062a\u0639\u062f\u064a\u0644 \u0627\u0644\u0642\u0635" : "Edit crop"),
+      photoRemove: baseLocale.photoRemove || (isArabic ? "\u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0635\u0648\u0631\u0629" : "Remove photo"),
+      photoPathLabel: baseLocale.photoPathLabel || (isArabic ? "\u0631\u0627\u0628\u0637 \u0623\u0648 \u0645\u0633\u0627\u0631 \u0627\u0644\u0635\u0648\u0631\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)" : "Image URL or path (optional)"),
+      photoPathPlaceholder: baseLocale.photoPathPlaceholder || (isArabic ? "\u0623\u062f\u062e\u0644 \u0631\u0627\u0628\u0637\u064b\u0627 \u0623\u0648 \u0645\u0633\u0627\u0631\u064b\u0627 \u0644\u0644\u0635\u0648\u0631\u0629" : "Enter an image URL or path"),
+      photoUploadedPlaceholder: baseLocale.photoUploadedPlaceholder || (isArabic ? "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u0635\u0648\u0631\u0629 \u0645\u0646 \u0627\u0644\u062c\u0647\u0627\u0632" : "Photo uploaded from this device"),
+      photoCropTitle: baseLocale.photoCropTitle || (isArabic ? "\u0642\u0635 \u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629" : "Crop profile photo"),
+      photoCropDescription: baseLocale.photoCropDescription || (isArabic ? "\u0627\u0633\u062d\u0628 \u0627\u0644\u0635\u0648\u0631\u0629 \u0648\u0643\u0628\u0651\u0631\u0647\u0627 \u0644\u0636\u0628\u0637\u0647\u0627 \u062f\u0627\u062e\u0644 \u0627\u0644\u0625\u0637\u0627\u0631 \u0627\u0644\u062f\u0627\u0626\u0631\u064a." : "Drag and zoom the image to position it inside the circular frame."),
+      photoCropStageLabel: baseLocale.photoCropStageLabel || (isArabic ? "\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0642\u0635. \u0627\u0633\u062d\u0628 \u0627\u0644\u0635\u0648\u0631\u0629 \u0623\u0648 \u0627\u0633\u062a\u062e\u062f\u0645 \u0645\u0641\u0627\u062a\u064a\u062d \u0627\u0644\u0623\u0633\u0647\u0645 \u0644\u062a\u062d\u0631\u064a\u0643\u0647\u0627." : "Crop preview. Drag the image or use the arrow keys to reposition it."),
+      photoZoom: baseLocale.photoZoom || (isArabic ? "\u0627\u0644\u062a\u0643\u0628\u064a\u0631" : "Zoom"),
+      photoRotateLeft: baseLocale.photoRotateLeft || (isArabic ? "\u062a\u062f\u0648\u064a\u0631 \u0644\u0644\u064a\u0633\u0627\u0631" : "Rotate left"),
+      photoRotateRight: baseLocale.photoRotateRight || (isArabic ? "\u062a\u062f\u0648\u064a\u0631 \u0644\u0644\u064a\u0645\u064a\u0646" : "Rotate right"),
+      photoReset: baseLocale.photoReset || (isArabic ? "\u0625\u0639\u0627\u062f\u0629 \u0636\u0628\u0637" : "Reset"),
+      photoCancel: baseLocale.photoCancel || (isArabic ? "\u0625\u0644\u063a\u0627\u0621" : "Cancel"),
+      photoSave: baseLocale.photoSave || (isArabic ? "\u062d\u0641\u0638 \u0627\u0644\u0635\u0648\u0631\u0629" : "Save photo"),
+      photoInvalidType: baseLocale.photoInvalidType || (isArabic ? "\u0627\u062e\u062a\u0631 \u0645\u0644\u0641 JPEG \u0623\u0648 PNG \u0623\u0648 WebP." : "Choose a JPEG, PNG, or WebP image."),
+      photoTooLarge: baseLocale.photoTooLarge || (isArabic ? "\u064a\u062c\u0628 \u0623\u0644\u0627 \u064a\u062a\u062c\u0627\u0648\u0632 \u062d\u062c\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 10 \u0645\u064a\u062c\u0627\u0628\u0627\u064a\u062a." : "The image must be 10 MB or smaller."),
+      photoLoadError: baseLocale.photoLoadError || (isArabic ? "\u062a\u0639\u0630\u0631 \u0641\u062a\u062d \u0627\u0644\u0635\u0648\u0631\u0629. \u0627\u062e\u062a\u0631 \u0645\u0644\u0641\u064b\u0627 \u0622\u062e\u0631." : "The image could not be opened. Choose another file."),
+      photoCorsError: baseLocale.photoCorsError || (isArabic ? "\u0644\u0627 \u064a\u0645\u0643\u0646 \u0642\u0635 \u0647\u0630\u0647 \u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u062e\u0627\u0631\u062c\u064a\u0629. \u062d\u0645\u0651\u0644\u0647\u0627 \u0645\u0646 \u062c\u0647\u0627\u0632\u0643 \u0623\u0648\u0644\u064b\u0627." : "This external image cannot be cropped. Upload it from your device instead."),
+      photoSaveError: baseLocale.photoSaveError || (isArabic ? "\u062a\u0639\u0630\u0631 \u062d\u0641\u0638 \u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0645\u0642\u0635\u0648\u0635\u0629." : "The cropped photo could not be saved."),
+      helpPhotoField: baseLocale.helpPhotoField || (isArabic ? "\u0627\u062e\u062a\u0631 \u0635\u0648\u0631\u0629 \u0645\u0646 \u062c\u0647\u0627\u0632\u0643 \u0648\u0627\u0636\u0628\u0637 \u0642\u0635\u0647\u0627\u060c \u0623\u0648 \u0627\u0633\u062a\u062e\u062f\u0645 \u0631\u0627\u0628\u0637\u064b\u0627 \u0623\u0648 \u0645\u0633\u0627\u0631\u064b\u0627 \u0627\u062e\u062a\u064a\u0627\u0631\u064a\u064b\u0627." : "Choose and crop a photo from your device, or use an optional image URL or path."),
       atsNavLabel: baseLocale.atsNavLabel || "ATS Helper",
       atsTitle: baseLocale.atsTitle || "ATS Helper",
       atsDescription: baseLocale.atsDescription || (
@@ -12297,7 +12778,7 @@
         showEditor: "إظهار المحرر",
         showPreview: "إظهار المعاينة",
         profileSectionTitle: "الملف الشخصي",
-        profileSectionDescription: "عدل الاسم وبيانات التواصل ومسار الصورة.",
+        profileSectionDescription: "عدل الاسم وبيانات التواصل والصورة الشخصية.",
         summarySectionTitle: "الملخص المهني",
         summarySectionDescription: "أي تعديل هنا يظهر مباشرة في المعاينة.",
         liveUpdates: "كل تغيير يظهر مباشرة في السيرة على اليمين.",
@@ -12316,7 +12797,7 @@
         importLanguageMismatch: "هذا الملف يخص لغة مختلفة عن الصفحة الحالية.",
         fields: {
           name: "الاسم",
-          photo: "مسار الصورة",
+          photo: "الصورة الشخصية",
           email: "البريد الإلكتروني",
           phone: "رقم الهاتف",
           phoneHref: "رابط الهاتف",
@@ -12358,7 +12839,7 @@
       showEditor: "Show editor",
       showPreview: "Show preview",
       profileSectionTitle: "Profile",
-      profileSectionDescription: "Update your name, contact details, and photo path.",
+      profileSectionDescription: "Update your name, contact details, and profile photo.",
       summarySectionTitle: "Professional summary",
       summarySectionDescription: "Edits here appear in the preview immediately.",
       liveUpdates: "Changes are reflected live in the resume preview.",
@@ -12377,7 +12858,7 @@
       importLanguageMismatch: "This file belongs to a different language page.",
       fields: {
         name: "Name",
-        photo: "Photo path",
+        photo: "Profile photo",
         email: "Email",
         phone: "Phone",
         phoneHref: "Phone link",

@@ -31,14 +31,27 @@ window.resumeData = {
     linkedinHref: "https://linkedin.com/in/amjad00",
     githubLabel: "github.com/jao399",
     githubHref: "https://github.com/jao399",
-    portfolioLabel: "",
-    portfolioHref: ""
+    portfolioLabel: "Portfolio",
+    portfolioHref: "https://amgadalzomi.vercel.app/"
   },
   summary:
-    "Technical leader and full-stack developer with hands-on experience delivering web platforms, cloud deployments, and secure infrastructure. Led delivery of a multi-tenant operations platform with 50+ API modules and 30+ application routes, building core functionality across authentication, RBAC, reporting, notifications, and Cloud Run deployments. Background in IT support, network and system troubleshooting, and AI-driven security research, with experience bridging engineering, operations, and product teams to deliver scalable, reliable solutions.",
+    "Information Technology Engineering Specialist with a background in full-stack development, cybersecurity, cloud deployment, IT support, and secure infrastructure. Currently supports IT systems, technical operations, and digital workflows at Kunooz Tuba Trading Company. Previously led end-to-end delivery of the Iftarak platform across frontend, backend, database, and cloud deployment, collaborating across engineering, operations, and product teams to deliver secure and reliable technology solutions.",
   professionalExperience: [
     {
-      date: "Feb 2025 - Present",
+      date: "Jul 2026 - Present",
+      location: "Saudi Arabia | Full-time",
+      organization: "Kunooz Tuba Trading Company",
+      role: "Information Technology Engineering Specialist",
+      bullets: [
+        "Support IT systems, technical operations, and digital workflows across the organization.",
+        "Troubleshoot and resolve technical issues to support smooth daily operations.",
+        "Assist in improving digital infrastructure, internal systems, and technical workflows.",
+        "Apply knowledge in cybersecurity, cloud systems, full-stack development, and IT infrastructure.",
+        "Collaborate with teams to maintain secure, reliable, and efficient technology operations."
+      ]
+    },
+    {
+      date: "Feb 2025 - Jun 2026",
       location: "Saudi Arabia",
       organization: "Iftarak Platform | Project Owner: Nusuk",
       role: "Technical Lead",

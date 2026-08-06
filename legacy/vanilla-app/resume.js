@@ -523,9 +523,9 @@
 
   function bindToolbar() {
     if (printButton) {
-      printButton.addEventListener("click", () => {
-        handleBeforePrint();
-        window.setTimeout(() => window.print(), 60);
+      printButton.addEventListener("click", async () => {
+        await preparePrintLayout();
+        window.print();
       });
     }
 
@@ -2066,12 +2066,28 @@
     return node;
   }
 
-  function handleBeforePrint() {
+  function enterPrintMode() {
     document.body.classList.add("is-printing");
     if (root) {
       root.style.setProperty("--preview-zoom", "100%");
     }
+  }
+
+  function handleBeforePrint() {
+    enterPrintMode();
     renderPreview();
+  }
+
+  async function preparePrintLayout() {
+    enterPrintMode();
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+    renderPreview();
+    await new Promise((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+    });
+    return true;
   }
 
   function handleAfterPrint() {
@@ -2080,10 +2096,7 @@
     renderTimer = window.setTimeout(renderPreview, 40);
   }
 
-  window.__resumePrepareForPrint = () => {
-    handleBeforePrint();
-    return true;
-  };
+  window.__resumePrepareForPrint = preparePrintLayout;
 
   window.__resumeRestoreAfterPrint = () => {
     handleAfterPrint();
@@ -11500,8 +11513,8 @@
 
     blocks.forEach((block) => {
       if (block.dataset.forcePageBreak === "true") {
-        if (page.body.children.length > 0) {
-        page = appendPage(false, pageClass);
+        if (page.sheet.classList.contains("sheet--first") && page.body.children.length > 0) {
+          page = appendPage(false, pageClass);
         }
         return;
       }
@@ -11979,7 +11992,14 @@
   }
 
   function overflows(container) {
-    return container.scrollHeight - container.clientHeight > 1;
+    if (container.scrollHeight - container.clientHeight > 1) {
+      return true;
+    }
+
+    const containerBottom = container.getBoundingClientRect().bottom;
+    return Array.from(container.children).some((child) => (
+      child.getBoundingClientRect().bottom - containerBottom > 1
+    ));
   }
 
   function contactLink(type, href, label, isStatic = false) {
