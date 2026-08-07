@@ -3,7 +3,7 @@
   --page-height: 297mm;
   --page-padding-x: 18mm;
   --page-padding-y: 11mm;
-  --page-bottom-reserve: 0mm;
+  --page-bottom-reserve: 8mm;
   --hero-bg: #e9e7e2;
   --surface: #ffffff;
   --surface-alt: #f3f1ed;
@@ -41,7 +41,6 @@ body {
 
 html[dir="rtl"] body {
   --cv-font-family: Arial, Helvetica, sans-serif;
-  --page-bottom-reserve: 10mm;
   --body-size: 10.5pt;
   --small-size: 10pt;
   --title-size: 12pt;

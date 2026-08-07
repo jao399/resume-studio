@@ -16,21 +16,32 @@ test("Arabic default preset uses Arial", async ({ page }) => {
   await expect(page.locator("body")).toHaveCSS("font-family", "Arial, Helvetica, sans-serif");
 });
 
-test("English print geometry does not inherit the Arabic bottom reserve", async ({ page }) => {
+test("English print pagination preserves a physical 8 mm bottom boundary", async ({ page }) => {
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
   await page.emulateMedia({ media: "print" });
   await page.evaluate(() => window.__resumePrepareForPrint());
 
-  const reserve = await page.locator(".sheet").first().evaluate((sheet) => {
-    const body = sheet.querySelector(".sheet__body");
-    return sheet.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom;
+  const layout = await page.evaluate(() => {
+    const ruler = document.createElement("div");
+    ruler.style.cssText = "position:fixed;visibility:hidden;width:8mm;height:1px";
+    document.body.appendChild(ruler);
+    const eightMillimeters = ruler.getBoundingClientRect().width;
+    ruler.remove();
+
+    const reserves = Array.from(document.querySelectorAll(".sheet")).map((sheet) => {
+      const body = sheet.querySelector(".sheet__body");
+      return sheet.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom;
+    });
+    return { eightMillimeters, reserves };
   });
 
-  expect(reserve).toBeLessThanOrEqual(1);
+  for (const reserve of layout.reserves) {
+    expect(reserve).toBeGreaterThanOrEqual(layout.eightMillimeters - 1);
+  }
 });
 
-test("Arabic print pagination preserves a physical 10 mm bottom boundary", async ({ page }) => {
+test("Arabic print pagination preserves a physical 8 mm bottom boundary", async ({ page }) => {
   await page.goto(ARABIC_URL, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
 
@@ -61,9 +72,9 @@ test("Arabic print pagination preserves a physical 10 mm bottom boundary", async
 
   const layout = await page.evaluate(() => {
     const ruler = document.createElement("div");
-    ruler.style.cssText = "position:fixed;visibility:hidden;width:10mm;height:1px";
+    ruler.style.cssText = "position:fixed;visibility:hidden;width:8mm;height:1px";
     document.body.appendChild(ruler);
-    const tenMillimeters = ruler.getBoundingClientRect().width;
+    const eightMillimeters = ruler.getBoundingClientRect().width;
     ruler.remove();
 
     const pages = Array.from(document.querySelectorAll(".sheet")).map((sheet) => {
@@ -79,12 +90,12 @@ test("Arabic print pagination preserves a physical 10 mm bottom boundary", async
       };
     });
 
-    return { tenMillimeters, pages };
+    return { eightMillimeters, pages };
   });
 
   expect(layout.pages.length).toBeGreaterThan(2);
   for (const printedPage of layout.pages) {
-    expect(printedPage.reserve).toBeGreaterThanOrEqual(layout.tenMillimeters - 1);
+    expect(printedPage.reserve).toBeGreaterThanOrEqual(layout.eightMillimeters - 1);
     expect(printedPage.overflow).toBeLessThanOrEqual(1);
     expect(printedPage.maxChildOverflow).toBeLessThanOrEqual(1);
     expect(printedPage.orphanedHeading).toBeFalsy();
