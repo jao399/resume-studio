@@ -8,6 +8,107 @@ test.use({
 const BASE_URL = process.env.RESUME_VERIFY_URL || "http://127.0.0.1:4176/index.html";
 const ARABIC_URL = BASE_URL.replace("index.html", "arabic.html");
 
+async function collectResumeSpacing(page) {
+  return page.evaluate(() => {
+    const visualGap = (previous, next) => (
+      next.getBoundingClientRect().top - previous.getBoundingClientRect().bottom
+    );
+    const metrics = {
+      timeline: [],
+      certificates: [],
+      sectionBefore: [],
+      sectionAfter: [],
+      bulletContent: []
+    };
+
+    document.querySelectorAll(".sheet__body").forEach((body) => {
+      const children = Array.from(body.children);
+      children.slice(1).forEach((next, index) => {
+        const previous = children[index];
+        const gap = visualGap(previous, next);
+        if (previous.matches(".timeline-item") && next.matches(".timeline-item")) {
+          metrics.timeline.push(gap);
+        }
+        if (previous.matches(".certificate-card") && next.matches(".certificate-card")) {
+          metrics.certificates.push(gap);
+        }
+        if (next.matches(".section-title") && !previous.matches(".hero")) {
+          metrics.sectionBefore.push(gap);
+        }
+        if (previous.matches(".section-title")) {
+          metrics.sectionAfter.push(gap);
+        }
+      });
+    });
+
+    document.querySelectorAll(".timeline-item__content > .bullet-list").forEach((list) => {
+      if (list.previousElementSibling) {
+        metrics.bulletContent.push(visualGap(list.previousElementSibling, list));
+      }
+    });
+
+    const rootStyle = getComputedStyle(document.documentElement);
+    return {
+      variables: {
+        section: rootStyle.getPropertyValue("--cv-section-gap").trim(),
+        sectionContent: rootStyle.getPropertyValue("--cv-section-content-gap").trim(),
+        entry: rootStyle.getPropertyValue("--cv-entry-gap").trim(),
+        entryContent: rootStyle.getPropertyValue("--cv-entry-content-gap").trim()
+      },
+      metrics
+    };
+  });
+}
+
+function expectGapsInRange(gaps, minimum, maximum) {
+  expect(gaps.length).toBeGreaterThan(0);
+  gaps.forEach((gap) => {
+    expect(gap).toBeGreaterThanOrEqual(minimum);
+    expect(gap).toBeLessThanOrEqual(maximum);
+  });
+}
+
+for (const language of [
+  { name: "English", url: BASE_URL },
+  { name: "Arabic", url: ARABIC_URL }
+]) {
+  for (const mode of ["preview", "print"]) {
+    test(`${language.name} ${mode} uses compact, consistent vertical spacing`, async ({ page }) => {
+      await page.goto(language.url, { waitUntil: "domcontentloaded" });
+      await page.waitForLoadState("networkidle");
+      if (mode === "print") {
+        await page.emulateMedia({ media: "print" });
+        await page.evaluate(() => window.__resumePrepareForPrint());
+      }
+
+      const spacing = await collectResumeSpacing(page);
+      expect(spacing.variables).toEqual({
+        section: "8px",
+        sectionContent: "5px",
+        entry: "6px",
+        entryContent: "5px"
+      });
+      expectGapsInRange(spacing.metrics.timeline, 5.5, 6.5);
+      expectGapsInRange(spacing.metrics.certificates, 5.5, 6.5);
+      expectGapsInRange(spacing.metrics.sectionBefore, 7.5, 8.5);
+      expectGapsInRange(spacing.metrics.sectionAfter, 4.5, 5.5);
+      expectGapsInRange(spacing.metrics.bulletContent, 4.5, 5.5);
+
+      const refinedVariables = await page.evaluate(() => {
+        document.body.dataset.stylePreset = "refined";
+        const style = getComputedStyle(document.body);
+        return [
+          style.getPropertyValue("--cv-section-gap").trim(),
+          style.getPropertyValue("--cv-section-content-gap").trim(),
+          style.getPropertyValue("--cv-entry-gap").trim(),
+          style.getPropertyValue("--cv-entry-content-gap").trim()
+        ];
+      });
+      expect(refinedVariables).toEqual(["8px", "5px", "6px", "5px"]);
+    });
+  }
+}
+
 test("Arabic default preset uses Arial", async ({ page }) => {
   await page.goto(ARABIC_URL, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
@@ -116,6 +217,7 @@ async function getTimelineStyles(item) {
 
     return {
       display: style.display,
+      columnGap: style.columnGap,
       backgroundColor: style.backgroundColor,
       borderTopStyle: style.borderTopStyle,
       borderRadius: style.borderRadius,
@@ -141,6 +243,7 @@ test("Arabic timeline uses an invisible RTL alignment grid", async ({ page }) =>
 
   const styles = await getTimelineStyles(item);
   expect(styles.display).toBe("grid");
+  expect(parseFloat(styles.columnGap)).toBeCloseTo(13.33, 1);
   expect(styles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
   expect(styles.borderTopStyle).toBe("none");
   expect(styles.borderRadius).toBe("0px");
