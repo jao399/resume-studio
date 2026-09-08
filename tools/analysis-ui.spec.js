@@ -238,4 +238,64 @@ test("profile photo upload, crop, persistence, and removal work", async ({ page 
   await page.waitForLoadState("networkidle");
   await expect(page.getByTestId("photo-choose-button")).toHaveText("اختر صورة");
   await expect(page.getByText("رابط أو مسار الصورة (اختياري)")).toBeVisible();
+  await page.getByTestId("photo-upload-input").setInputFiles({
+    name: "profile.png",
+    mimeType: "image/png",
+    buffer: png
+  });
+  await expect(page.getByTestId("photo-fit")).toHaveText("ملاءمة الصورة كاملة");
+  await page.getByTestId("photo-cancel").click();
+});
+
+test("photo cropper can fit the complete source image and uses an accurate circular guide", async ({ page }) => {
+  await page.goto(`${BASE_URL}#profile`, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle");
+
+  const wideRedPng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAZAAAADICAIAAABJdyC1AAACrklEQVR4nO3UQQ3AIADAQJgG5OBfBWJmgR9pcqegr86z9gAo+F4HANwyLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CADMMCMgwLyDAsIMOwgAzDAjIMC8gwLCDDsIAMwwIyDAvIMCwgw7CAUfEDqMQCvJmTGrAAAAAASUVORK5CYII=",
+    "base64"
+  );
+  await page.getByTestId("photo-upload-input").setInputFiles({
+    name: "wide-profile.png",
+    mimeType: "image/png",
+    buffer: wideRedPng
+  });
+
+  const cropDialog = page.getByTestId("photo-crop-dialog");
+  const cropStage = page.getByTestId("photo-crop-stage");
+  const cropMask = cropDialog.locator(".photo-crop-dialog__mask");
+  await expect(cropDialog).toBeVisible();
+  await expect(cropDialog).toContainText("Fit whole image");
+
+  const [stageBox, maskBox] = await Promise.all([cropStage.boundingBox(), cropMask.boundingBox()]);
+  expect(stageBox).not.toBeNull();
+  expect(maskBox).not.toBeNull();
+  expect(Math.abs(maskBox.x - stageBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(maskBox.y - stageBox.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(maskBox.width - stageBox.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(maskBox.height - stageBox.height)).toBeLessThanOrEqual(1);
+
+  const zoomInput = page.getByTestId("photo-zoom-input");
+  expect(Number(await zoomInput.getAttribute("min"))).toBeCloseTo(0.5, 5);
+  await page.getByTestId("photo-fit").click();
+  expect(Number(await zoomInput.inputValue())).toBeCloseTo(0.5, 5);
+  await page.getByTestId("photo-save").click();
+
+  const previewPhoto = page.locator("#resume .hero__photo");
+  await expect(previewPhoto).toBeVisible();
+  const samples = await previewPhoto.evaluate((image) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    context.drawImage(image, 0, 0);
+    return {
+      topCenter: Array.from(context.getImageData(256, 16, 1, 1).data.slice(0, 3)),
+      leftCenter: Array.from(context.getImageData(16, 256, 1, 1).data.slice(0, 3))
+    };
+  });
+  expect(samples.topCenter.every((channel) => channel > 240)).toBeTruthy();
+  expect(samples.leftCenter[0]).toBeGreaterThan(180);
+  expect(samples.leftCenter[1]).toBeLessThan(80);
+  expect(samples.leftCenter[2]).toBeLessThan(100);
 });

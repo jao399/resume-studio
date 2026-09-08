@@ -5305,6 +5305,13 @@
       return Math.max(photoOutputSize / rotated.width, photoOutputSize / rotated.height) * cropState.zoom;
     };
 
+    const getMinimumZoom = () => {
+      const rotated = getRotatedSize();
+      const coverScale = Math.max(photoOutputSize / rotated.width, photoOutputSize / rotated.height);
+      const containScale = Math.min(photoOutputSize / rotated.width, photoOutputSize / rotated.height);
+      return containScale / coverScale;
+    };
+
     const clampOffsets = () => {
       const rotated = getRotatedSize();
       const scale = getScale();
@@ -5352,7 +5359,7 @@
     zoomLabel.textContent = locale.photoZoom;
     const zoomInput = document.createElement("input");
     zoomInput.type = "range";
-    zoomInput.min = "1";
+    zoomInput.min = String(getMinimumZoom());
     zoomInput.max = "3";
     zoomInput.step = "0.01";
     zoomInput.value = "1";
@@ -5365,6 +5372,15 @@
 
     const transformActions = document.createElement("div");
     transformActions.className = "editor-actions photo-crop-dialog__transform-actions";
+
+    const fitPhoto = createActionButton(locale.photoFit, "", () => {
+      cropState.zoom = getMinimumZoom();
+      cropState.offsetX = 0;
+      cropState.offsetY = 0;
+      zoomInput.value = String(cropState.zoom);
+      drawCrop();
+    });
+    fitPhoto.dataset.testid = "photo-fit";
 
     const rotateLeft = createActionButton(locale.photoRotateLeft, "", () => {
       cropState.rotation = (cropState.rotation - 90) % 360;
@@ -5391,7 +5407,7 @@
       drawCrop();
     });
     reset.dataset.testid = "photo-reset";
-    transformActions.append(rotateLeft, rotateRight, reset);
+    transformActions.append(fitPhoto, rotateLeft, rotateRight, reset);
     controls.append(zoomField, transformActions);
 
     let drag = null;
@@ -12294,9 +12310,10 @@
       photoPathPlaceholder: baseLocale.photoPathPlaceholder || (isArabic ? "\u0623\u062f\u062e\u0644 \u0631\u0627\u0628\u0637\u064b\u0627 \u0623\u0648 \u0645\u0633\u0627\u0631\u064b\u0627 \u0644\u0644\u0635\u0648\u0631\u0629" : "Enter an image URL or path"),
       photoUploadedPlaceholder: baseLocale.photoUploadedPlaceholder || (isArabic ? "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u0635\u0648\u0631\u0629 \u0645\u0646 \u0627\u0644\u062c\u0647\u0627\u0632" : "Photo uploaded from this device"),
       photoCropTitle: baseLocale.photoCropTitle || (isArabic ? "\u0642\u0635 \u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629" : "Crop profile photo"),
-      photoCropDescription: baseLocale.photoCropDescription || (isArabic ? "\u0627\u0633\u062d\u0628 \u0627\u0644\u0635\u0648\u0631\u0629 \u0648\u0643\u0628\u0651\u0631\u0647\u0627 \u0644\u0636\u0628\u0637\u0647\u0627 \u062f\u0627\u062e\u0644 \u0627\u0644\u0625\u0637\u0627\u0631 \u0627\u0644\u062f\u0627\u0626\u0631\u064a." : "Drag and zoom the image to position it inside the circular frame."),
+      photoCropDescription: baseLocale.photoCropDescription || (isArabic ? "\u0627\u0633\u062d\u0628 \u0627\u0644\u0635\u0648\u0631\u0629 \u0648\u0643\u0628\u0651\u0631\u0647\u0627 \u0623\u0648 \u0635\u063a\u0651\u0631\u0647\u0627\u060c \u0623\u0648 \u0627\u062e\u062a\u0631 \u0645\u0644\u0627\u0621\u0645\u0629 \u0627\u0644\u0635\u0648\u0631\u0629 \u0644\u0625\u0638\u0647\u0627\u0631\u0647\u0627 \u0643\u0627\u0645\u0644\u0629 \u062f\u0627\u062e\u0644 \u0627\u0644\u0625\u0637\u0627\u0631 \u0627\u0644\u062f\u0627\u0626\u0631\u064a." : "Drag and zoom the image, or choose Fit whole image to keep the complete photo inside the circular frame."),
       photoCropStageLabel: baseLocale.photoCropStageLabel || (isArabic ? "\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0642\u0635. \u0627\u0633\u062d\u0628 \u0627\u0644\u0635\u0648\u0631\u0629 \u0623\u0648 \u0627\u0633\u062a\u062e\u062f\u0645 \u0645\u0641\u0627\u062a\u064a\u062d \u0627\u0644\u0623\u0633\u0647\u0645 \u0644\u062a\u062d\u0631\u064a\u0643\u0647\u0627." : "Crop preview. Drag the image or use the arrow keys to reposition it."),
       photoZoom: baseLocale.photoZoom || (isArabic ? "\u0627\u0644\u062a\u0643\u0628\u064a\u0631" : "Zoom"),
+      photoFit: baseLocale.photoFit || (isArabic ? "\u0645\u0644\u0627\u0621\u0645\u0629 \u0627\u0644\u0635\u0648\u0631\u0629 \u0643\u0627\u0645\u0644\u0629" : "Fit whole image"),
       photoRotateLeft: baseLocale.photoRotateLeft || (isArabic ? "\u062a\u062f\u0648\u064a\u0631 \u0644\u0644\u064a\u0633\u0627\u0631" : "Rotate left"),
       photoRotateRight: baseLocale.photoRotateRight || (isArabic ? "\u062a\u062f\u0648\u064a\u0631 \u0644\u0644\u064a\u0645\u064a\u0646" : "Rotate right"),
       photoReset: baseLocale.photoReset || (isArabic ? "\u0625\u0639\u0627\u062f\u0629 \u0636\u0628\u0637" : "Reset"),
